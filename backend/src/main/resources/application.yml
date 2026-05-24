@@ -1,0 +1,113 @@
+server:
+  port: 8080
+spring:
+  application:
+    name: marketinghub-backend
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.dialect: org.hibernate.dialect.PostgreSQLDialect
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+    listener:
+      simple:
+        concurrency: 4
+        max-concurrency: 8
+        prefetch: 8
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+  ai:
+    openai:
+      # The placeholder lets Spring AI auto-config build its ChatModel bean even when no
+      # real key is configured. With ai.mock=true the bean is never actually called —
+      # AIReplyWorker is wired to MockAIChatClient instead. Override at runtime via
+      # OPENAI_API_KEY when going to real OpenAI.
+      api-key: ${OPENAI_API_KEY:sk-mock-not-called-in-mock-mode}
+      chat:
+        options:
+          model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+          temperature: 0.4
+    # Disable modalities we don't use so their auto-configurations don't trip on the
+    # placeholder key. Embedding stays enabled so Spring AI sees an EmbeddingModel bean
+    # (provided by MockEmbeddingModel when ai.mock=true, or the OpenAI auto-config when
+    # the user flips OPENAI_MOCK=false + OPENAI_EMBEDDING_AUTOCONFIG=openai).
+    model:
+      audio:
+        speech: none
+        transcription: none
+      image: none
+      moderation: none
+      embedding: ${OPENAI_EMBEDDING_AUTOCONFIG:none}
+    vectorstore:
+      pgvector:
+        # Flyway owns the vector_store DDL — don't let Spring AI try to create or alter
+        # the table on startup.
+        initialize-schema: false
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+        dimensions: 1536
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 25MB
+security:
+  jwt:
+    secret: ${JWT_SECRET}
+    access-token-ttl-minutes: 15
+    refresh-token-ttl-days: 7
+platform-admin:
+  email: ${PLATFORM_ADMIN_EMAIL:}
+  password: ${PLATFORM_ADMIN_PASSWORD:}
+app:
+  encryption:
+    master-key: ${ENCRYPTION_MASTER_KEY}
+whatsapp:
+  mock: ${WHATSAPP_MOCK:false}
+  api:
+    base-url: https://graph.facebook.com/v21.0
+  webhook:
+    # Meta GET handshake compares hub.verify_token to this. Choose any random string and
+    # paste the same value into the Meta App webhook configuration.
+    verify-token: ${WHATSAPP_VERIFY_TOKEN:}
+    # The Meta App secret (NOT the per-tenant access token). Meta signs each webhook body
+    # with HMAC-SHA256(app_secret, raw_body); we verify in constant time. Leave blank
+    # locally to disable signature verification (dev only).
+    app-secret: ${WHATSAPP_APP_SECRET:}
+ai:
+  mock: ${OPENAI_MOCK:true}
+  # Number of past messages (each direction) to include when calling the LLM.
+  history-window: 10
+  # Default confidence threshold under which the bot hands off to a human.
+  default-handoff-confidence: 0.5
+  default-system-prompt: |
+    You are a friendly support assistant for a marketing-services company that sends
+    WhatsApp messages on behalf of its clients. Reply briefly and politely. If the
+    customer asks for a human, says they want to talk to an agent, or expresses
+    strong frustration, set request_handoff to true. Otherwise, answer the question.
+blast:
+  rate-limit:
+    # capacity=1 enforces strict pacing (every send waits 1/refill seconds).
+    # With capacity=refill there's a burst-then-throttle pattern; we keep strict pacing
+    # so the Phase 13 verification gate's "100 messages ≥ 1.25s" math holds and we
+    # don't accidentally exceed Meta's burst tolerance.
+    capacity: 1
+    refill-per-second: 80
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
