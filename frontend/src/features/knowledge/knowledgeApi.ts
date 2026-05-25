@@ -11,6 +11,11 @@ export type KnowledgeDocument = {
   errorMessage: string | null;
   chunkCount: number;
   createdByUserId: string;
+  // hasContent = false for rows uploaded before V14 (no source file kept).
+  // The Download button is disabled with an explanatory tooltip in that case.
+  hasContent: boolean;
+  contentSize: number | null;
+  contentType: string | null;
   createdAt: string;
   updatedAt: string;
 };

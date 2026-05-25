@@ -16,3 +16,30 @@ body {
     Arial,
     sans-serif;
 }
+
+/* ---------- Mobile polish ---------- */
+
+/* Cap modal width on small screens so the default 520-px modal doesn't overflow
+   a 360-px phone viewport. !important is needed to override AntD's inline style. */
+@media (max-width: 575px) {
+  .ant-modal {
+    max-width: calc(100vw - 16px) !important;
+    margin: 8px auto !important;
+    top: 8px !important;
+  }
+}
+
+/* Long emails / IDs in cells should wrap rather than blow out the column.
+   Specifically targets text-overflow:ellipsis cells we set inline. */
+.ant-table-cell {
+  word-break: break-word;
+}
+
+/* AntD Layout.Header is 64px on desktop but cramps on phones — drop a little. */
+@media (max-width: 575px) {
+  .ant-layout-header {
+    padding-inline: 12px !important;
+    height: 56px !important;
+    line-height: 56px !important;
+  }
+}

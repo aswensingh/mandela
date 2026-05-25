@@ -7,6 +7,7 @@ export type AuthUser = {
   email: string;
   fullName: string;
   tenantId: string | null;
+  tenantName: string | null; // null for platform admins
   role: UserRole;
 };
 

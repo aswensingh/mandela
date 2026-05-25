@@ -261,6 +261,7 @@ export default function TenantsPage() {
         loading={isLoading}
         columns={columns}
         dataSource={data?.content ?? []}
+        scroll={{ x: 'max-content' }}
         pagination={{
           current: (data?.number ?? 0) + 1,
           pageSize,

@@ -9,13 +9,20 @@ import {
   Space,
   Table,
   Tag,
+  Tooltip,
   Typography,
   Upload,
   message,
 } from 'antd';
-import { InboxOutlined } from '@ant-design/icons';
+import {
+  BookOutlined,
+  DownloadOutlined,
+  InboxOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadFile } from 'antd/es/upload/interface';
+import { useAppSelector } from '@/app/hooks';
 import {
   useDeleteDocumentMutation,
   useListDocumentsQuery,
@@ -23,6 +30,7 @@ import {
   type KnowledgeDocument,
   type KnowledgeDocumentStatus,
 } from './knowledgeApi';
+import TableEmpty from '@/shared/TableEmpty';
 
 const { Title, Paragraph } = Typography;
 const { Dragger } = Upload;
@@ -46,6 +54,9 @@ export default function KnowledgeBasePage() {
   );
   const [uploadDoc, { isLoading: isUploading }] = useUploadDocumentMutation();
   const [deleteDoc, { isLoading: isDeleting }] = useDeleteDocumentMutation();
+  const accessToken = useAppSelector((s) => s.auth.accessToken);
+  // Track which row is currently downloading so we can spin its button only.
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [files, setFiles] = useState<UploadFile[]>([]);
@@ -86,6 +97,38 @@ export default function KnowledgeBasePage() {
     }
   };
 
+  /**
+   * Streams the original file from the backend with the Bearer token attached,
+   * then triggers a browser download via an object-URL <a> click. We can't use a
+   * plain `<a href>` because the endpoint requires the Authorization header — so
+   * we fetch the bytes, materialise them as a Blob, and let the browser save.
+   */
+  const onDownload = async (record: KnowledgeDocument) => {
+    if (!record.hasContent) return;
+    setDownloadingId(record.id);
+    try {
+      const res = await fetch(`/api/knowledge-documents/${record.id}/download`, {
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+      });
+      if (!res.ok) {
+        throw new Error(`Download failed (HTTP ${res.status})`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = record.fileName || record.title || 'download';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : 'Download failed');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   const onDelete = async (record: KnowledgeDocument) => {
     try {
       await deleteDoc(record.id).unwrap();
@@ -119,20 +162,37 @@ export default function KnowledgeBasePage() {
         title: 'Actions',
         key: 'actions',
         render: (_v, record) => (
-          <Popconfirm
-            title={`Delete "${record.title}"?`}
-            okText="Delete"
-            okButtonProps={{ danger: true }}
-            onConfirm={() => onDelete(record)}
-          >
-            <Button size="small" danger loading={isDeleting}>
-              Delete
-            </Button>
-          </Popconfirm>
+          <Space size={4}>
+            <Tooltip
+              title={
+                record.hasContent
+                  ? `Download "${record.fileName}"`
+                  : 'Source file not available (uploaded before download was supported)'
+              }
+            >
+              <Button
+                size="small"
+                icon={<DownloadOutlined />}
+                disabled={!record.hasContent}
+                loading={downloadingId === record.id}
+                onClick={() => onDownload(record)}
+              />
+            </Tooltip>
+            <Popconfirm
+              title={`Delete "${record.title}"?`}
+              okText="Delete"
+              okButtonProps={{ danger: true }}
+              onConfirm={() => onDelete(record)}
+            >
+              <Button size="small" danger loading={isDeleting}>
+                Delete
+              </Button>
+            </Popconfirm>
+          </Space>
         ),
       },
     ],
-    [isDeleting],
+    [isDeleting, downloadingId, accessToken],
   );
 
   return (
@@ -165,6 +225,21 @@ export default function KnowledgeBasePage() {
         loading={isLoading}
         columns={columns}
         dataSource={data?.content ?? []}
+        scroll={{ x: 'max-content' }}
+        locale={{
+          emptyText: (
+            <TableEmpty
+              icon={<BookOutlined style={{ fontSize: 42, color: 'rgba(0,0,0,0.25)' }} />}
+              title="No knowledge documents yet"
+              hint="Upload PDFs / Markdown / TXT files about your business (FAQ, price list, opening hours). The AI bot will pull relevant chunks from them when answering customers."
+              actions={
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
+                  Upload a document
+                </Button>
+              }
+            />
+          ),
+        }}
         pagination={{
           current: (data?.number ?? 0) + 1,
           pageSize,

@@ -102,12 +102,20 @@ public class AuthService {
         return new AuthResponse(accessToken, refreshTokenPlain, toDto(user));
     }
 
-    static UserDto toDto(User user) {
+    /** Non-static so we can resolve the tenant name. Platform admins get tenantName=null. */
+    UserDto toDto(User user) {
+        String tenantName = null;
+        if (user.getTenantId() != null) {
+            tenantName = tenantRepository.findById(user.getTenantId())
+                .map(Tenant::getName)
+                .orElse(null);
+        }
         return new UserDto(
             user.getId(),
             user.getEmail(),
             user.getFullName(),
             user.getTenantId(),
+            tenantName,
             user.getRole()
         );
     }

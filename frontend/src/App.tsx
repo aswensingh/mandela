@@ -2,7 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import LoginPage from '@/features/auth/LoginPage';
 import ProtectedRoute from '@/features/auth/ProtectedRoute';
 import RoleRoute from '@/features/auth/RoleRoute';
-import WelcomePage from '@/features/auth/WelcomePage';
+import DashboardPage from '@/features/dashboard/DashboardPage';
 import TenantsPage from '@/features/tenants/TenantsPage';
 import UsersPage from '@/features/users/UsersPage';
 import CustomersPage from '@/features/customers/CustomersPage';
@@ -19,7 +19,7 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route element={<ProtectedRoute />}>
         <Route path="/app" element={<AppLayout />}>
-          <Route index element={<WelcomePage />} />
+          <Route index element={<DashboardPage />} />
           <Route element={<RoleRoute roles={['PLATFORM_ADMIN']} />}>
             <Route path="tenants" element={<TenantsPage />} />
           </Route>

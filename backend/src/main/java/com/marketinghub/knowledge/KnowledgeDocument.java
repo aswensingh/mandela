@@ -45,6 +45,18 @@ public class KnowledgeDocument {
     @Column(name = "created_by_user_id", nullable = false)
     private UUID createdByUserId;
 
+    // Raw bytes of the uploaded file — nullable for rows created before V14, when
+    // we didn't persist the original. The DTO exposes a hasContent boolean so the
+    // UI can disable the Download button for those legacy rows.
+    @Column(name = "content")
+    private byte[] content;
+
+    @Column(name = "content_type")
+    private String contentType;
+
+    @Column(name = "content_size")
+    private Long contentSize;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -76,6 +88,15 @@ public class KnowledgeDocument {
 
     public UUID getCreatedByUserId() { return createdByUserId; }
     public void setCreatedByUserId(UUID createdByUserId) { this.createdByUserId = createdByUserId; }
+
+    public byte[] getContent() { return content; }
+    public void setContent(byte[] content) { this.content = content; }
+
+    public String getContentType() { return contentType; }
+    public void setContentType(String contentType) { this.contentType = contentType; }
+
+    public Long getContentSize() { return contentSize; }
+    public void setContentSize(Long contentSize) { this.contentSize = contentSize; }
 
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

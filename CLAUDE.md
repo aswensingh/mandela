@@ -22,10 +22,10 @@
 | Build | Maven | **3.9.16** | already installed |
 | Backend | Spring Boot | **3.5.x** (latest 3.5) | NOT 4.x — keep ecosystem maturity |
 | Database | PostgreSQL | **16** | with `pgvector` extension for AI RAG (used in later phase) |
-| Frontend | React | **18.3** | NOT 19 — keep AntD 5 compatible |
+| Frontend | React | **19.x** | upgraded from 18.3 once AntD 5.22+ landed React-19 support; static `message.X()` works via `@ant-design/v5-patch-for-react-19` + AntD `<App>` context wrapper |
 | Build (FE) | Vite | **5.x** | |
 | Language (FE) | TypeScript | **5.x** | |
-| UI library | Ant Design | **5.x** | NOT v6 — keep ecosystem maturity |
+| UI library | Ant Design | **5.x** (5.24+) | NOT v6 — keep ecosystem maturity. Static methods (`message.X`, `Modal.confirm`) require either the patch package or `App.useApp()` |
 | State management | Redux Toolkit + RTK Query | **2.x** | not classic Redux, not redux-saga |
 | Routing | React Router | **6.x** | |
 | Node | Node.js | **24 LTS** | already installed |
@@ -33,7 +33,7 @@
 | AI chatbot | OpenAI (chat + embeddings) | gpt-4o-mini for chat, text-embedding-3-small | single vendor, one API key |
 | Local infra | Docker Compose | v2 | |
 
-**Why not the bleeding edge?** Spring Boot 4 and AntD 6 just shipped. Claude Code's training data and the wider ecosystem still lean toward Spring Boot 3.x and AntD 5. Last build attempt failed partly because of this. We trade "newest" for "runs on first try."
+**Why not the bleeding edge?** Spring Boot 4 and AntD 6 are still recent enough that ecosystem support is uneven — we stay on Spring Boot 3.5 and AntD 5 deliberately. React 19, which started in the same "too new" bucket, has since stabilized and AntD 5.22+ supports it cleanly, so the frontend was upgraded May 2026 (see commit log). We trade "newest" for "runs on first try."
 
 **Java 25 with Spring Boot 3.5** is fully supported and gives us virtual threads, pattern matching, etc.
 
@@ -48,7 +48,7 @@
 5. **NO mirroring server state into Redux slices.** Server data lives in RTK Query cache. Slices are for client-only state (auth, UI).
 6. **NO secrets in code or config files committed to git.** Use `.env` (gitignored) + `.env.example` (committed).
 7. **NO `hibernate.ddl-auto: create` or `update`.** Always `validate`. Flyway owns the schema.
-8. **NO Spring Boot 4 or AntD 6 patterns.** Use Spring Boot 3.5 + AntD 5 documented APIs only.
+8. **NO Spring Boot 4 or AntD 6 patterns.** Use Spring Boot 3.5 + AntD 5 documented APIs only. (React 19 patterns are OK — see the tech-stack table.)
 9. **Every tenant-scoped DB query must filter by `tenant_id`.** Multi-tenancy enforcement details added in the auth phase.
 
 ## Repository layout

@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   Empty,
+  Grid,
   Input,
   Layout,
   List,
@@ -15,7 +16,7 @@ import {
   Typography,
   message as antMessage,
 } from 'antd';
-import { SendOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SendOutlined } from '@ant-design/icons';
 import { useAppSelector } from '@/app/hooks';
 import type { UserRole } from '@/features/auth/authSlice';
 import {
@@ -32,6 +33,7 @@ import {
 const { Title, Text, Paragraph } = Typography;
 const { Sider, Content } = Layout;
 const { TextArea } = Input;
+const { useBreakpoint } = Grid;
 
 const POLL_INTERVAL_MS = 5000;
 const TAB_ITEMS: { key: ConversationFilter; label: string }[] = [
@@ -52,6 +54,8 @@ export default function ConversationsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const role = useAppSelector((s) => s.auth.user?.role);
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
 
   const { data, isLoading, error } = useListConversationsQuery(
     { filter, page: 0, size: 100 },
@@ -61,14 +65,88 @@ export default function ConversationsPage() {
   const conversations = data?.content ?? [];
   const selected = conversations.find((c) => c.id === selectedId) ?? null;
 
+  // Mobile-only: when a conversation is open, hide the list and show only the thread.
+  // Desktop / tablet keeps the original two-pane layout side by side.
+  const showListOnMobile = isMobile && !selected;
+  const showThreadOnMobile = isMobile && !!selected;
+
+  // On mobile the top header + page title eat more relative space, so we lean on
+  // dynamic viewport height (`dvh` is the modern fix for mobile-browser address bars).
+  const paneHeight = isMobile ? 'calc(100dvh - 160px)' : 'calc(100vh - 220px)';
+
+  const listCard = (
+    <Card
+      styles={{ body: { padding: 0 } }}
+      style={{ height: paneHeight, display: 'flex', flexDirection: 'column' }}
+    >
+      <Tabs
+        activeKey={filter}
+        onChange={(k) => setFilter(k as ConversationFilter)}
+        items={TAB_ITEMS.map((t) => ({ key: t.key, label: t.label }))}
+        style={{ padding: '0 12px' }}
+      />
+      <div style={{ overflow: 'auto', flex: 1 }}>
+        {isLoading ? (
+          <Skeleton active style={{ padding: 16 }} />
+        ) : conversations.length === 0 ? (
+          <Empty description="No conversations" style={{ marginTop: 32 }} />
+        ) : (
+          <List
+            dataSource={conversations}
+            renderItem={(c) => (
+              <ConversationRow
+                conversation={c}
+                selected={c.id === selectedId}
+                onSelect={() => setSelectedId(c.id)}
+              />
+            )}
+          />
+        )}
+      </div>
+    </Card>
+  );
+
+  const threadCard = (
+    <Card
+      style={{ height: paneHeight, display: 'flex', flexDirection: 'column' }}
+      styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', flex: 1 } }}
+    >
+      {!selected ? (
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Empty description="Pick a conversation" />
+        </div>
+      ) : (
+        <ConversationThread
+          conversation={selected}
+          role={role}
+          isMobile={isMobile}
+          onBack={() => setSelectedId(null)}
+        />
+      )}
+    </Card>
+  );
+
   return (
     <Layout style={{ background: 'transparent' }}>
-      <Title level={3} style={{ marginTop: 0 }}>
-        Conversations
-      </Title>
-      <Paragraph type="secondary" style={{ marginBottom: 16 }}>
-        Inbound WhatsApp messages land here. List auto-refreshes every 5 seconds.
-      </Paragraph>
+      {/* On mobile, skip the page header when looking at a single thread — the
+          back-button + customer name inside the thread already act as the header. */}
+      {!showThreadOnMobile && (
+        <>
+          <Title level={isMobile ? 4 : 3} style={{ marginTop: 0 }}>
+            Conversations
+          </Title>
+          <Paragraph type="secondary" style={{ marginBottom: 16 }}>
+            Inbound WhatsApp messages land here. List auto-refreshes every 5 seconds.
+          </Paragraph>
+        </>
+      )}
 
       {error && (
         <Alert
@@ -79,61 +157,17 @@ export default function ConversationsPage() {
         />
       )}
 
-      <Layout style={{ background: 'transparent', gap: 16 }}>
-        <Sider width={360} theme="light" style={{ background: 'transparent' }}>
-          <Card
-            styles={{ body: { padding: 0 } }}
-            style={{ height: 'calc(100vh - 220px)', display: 'flex', flexDirection: 'column' }}
-          >
-            <Tabs
-              activeKey={filter}
-              onChange={(k) => setFilter(k as ConversationFilter)}
-              items={TAB_ITEMS.map((t) => ({ key: t.key, label: t.label }))}
-              style={{ padding: '0 12px' }}
-            />
-            <div style={{ overflow: 'auto', flex: 1 }}>
-              {isLoading ? (
-                <Skeleton active style={{ padding: 16 }} />
-              ) : conversations.length === 0 ? (
-                <Empty description="No conversations" style={{ marginTop: 32 }} />
-              ) : (
-                <List
-                  dataSource={conversations}
-                  renderItem={(c) => (
-                    <ConversationRow
-                      conversation={c}
-                      selected={c.id === selectedId}
-                      onSelect={() => setSelectedId(c.id)}
-                    />
-                  )}
-                />
-              )}
-            </div>
-          </Card>
-        </Sider>
-
-        <Content>
-          <Card
-            style={{ height: 'calc(100vh - 220px)', display: 'flex', flexDirection: 'column' }}
-            styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', flex: 1 } }}
-          >
-            {!selected ? (
-              <div
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Empty description="Pick a conversation" />
-              </div>
-            ) : (
-              <ConversationThread conversation={selected} role={role} />
-            )}
-          </Card>
-        </Content>
-      </Layout>
+      {isMobile ? (
+        // Single-pane: list OR thread, never both.
+        showListOnMobile ? listCard : threadCard
+      ) : (
+        <Layout style={{ background: 'transparent', gap: 16 }}>
+          <Sider width={360} theme="light" style={{ background: 'transparent' }}>
+            {listCard}
+          </Sider>
+          <Content>{threadCard}</Content>
+        </Layout>
+      )}
     </Layout>
   );
 }
@@ -197,9 +231,13 @@ function ConversationRow({
 function ConversationThread({
   conversation,
   role,
+  isMobile,
+  onBack,
 }: {
   conversation: ConversationListItem;
   role: UserRole | undefined;
+  isMobile: boolean;
+  onBack: () => void;
 }) {
   const { data, isLoading } = useListMessagesQuery(
     { id: conversation.id, page: 0, size: 200 },
@@ -263,20 +301,44 @@ function ConversationThread({
       <div
         style={{
           borderBottom: '1px solid #f0f0f0',
-          padding: 16,
+          padding: isMobile ? 12 : 16,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 16,
+          gap: 12,
+          flexWrap: 'wrap',
         }}
       >
-        <div>
-          <Title level={5} style={{ margin: 0 }}>
-            {conversation.customerName ?? conversation.customerPhone ?? conversation.customerId}
-          </Title>
-          <Text type="secondary">{conversation.customerPhone}</Text>
-          <StatusTag status={conversation.status} style={{ marginLeft: 8 }} />
-        </div>
+        <Space size={8} style={{ minWidth: 0, flex: 1 }}>
+          {isMobile && (
+            <Button
+              type="text"
+              icon={<ArrowLeftOutlined />}
+              onClick={onBack}
+              aria-label="Back to conversation list"
+            />
+          )}
+          <div style={{ minWidth: 0 }}>
+            <Title
+              level={5}
+              style={{
+                margin: 0,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: isMobile ? 180 : 'none',
+              }}
+            >
+              {conversation.customerName ?? conversation.customerPhone ?? conversation.customerId}
+            </Title>
+            <Space size={6}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {conversation.customerPhone}
+              </Text>
+              <StatusTag status={conversation.status} />
+            </Space>
+          </div>
+        </Space>
         <Space>
           {isBotActive && (
             <Tooltip
@@ -346,34 +408,54 @@ function ConversationThread({
         ) : !controllable ? (
           <Text type="secondary">Your role can view this conversation but not reply.</Text>
         ) : (
-          <Space.Compact style={{ width: '100%' }}>
-            <TextArea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="Type a reply…"
-              autoSize={{ minRows: 1, maxRows: 4 }}
-              maxLength={REPLY_MAX}
-              showCount
-              disabled={sendState.isLoading}
-              onPressEnter={(e) => {
-                // Cmd/Ctrl+Enter sends; bare Enter inserts newline.
-                if (e.ctrlKey || e.metaKey) {
-                  e.preventDefault();
-                  void onSend();
-                }
-              }}
-            />
-            <Button
-              type="primary"
-              icon={<SendOutlined />}
-              loading={sendState.isLoading}
-              disabled={!canSend}
-              onClick={onSend}
-              style={{ height: 'auto' }}
-            >
-              Send
-            </Button>
-          </Space.Compact>
+          // AntD's `showCount` renders an absolutely-positioned counter that escapes any
+          // flex container, so we render our own counter below the row instead. It only
+          // appears once the user starts typing, keeping the composer clean when idle.
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <TextArea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder="Type a reply…"
+                  autoSize={{ minRows: 1, maxRows: 4 }}
+                  maxLength={REPLY_MAX}
+                  disabled={sendState.isLoading}
+                  onPressEnter={(e) => {
+                    // Cmd/Ctrl+Enter sends; bare Enter inserts newline.
+                    if (e.ctrlKey || e.metaKey) {
+                      e.preventDefault();
+                      void onSend();
+                    }
+                  }}
+                />
+              </div>
+              <Button
+                type="primary"
+                icon={<SendOutlined />}
+                loading={sendState.isLoading}
+                disabled={!canSend}
+                onClick={onSend}
+              >
+                Send
+              </Button>
+            </div>
+            {draft.length > 0 && (
+              <Text
+                type="secondary"
+                style={{
+                  fontSize: 11,
+                  textAlign: 'right',
+                  color:
+                    draft.length > REPLY_MAX * 0.95
+                      ? '#cf1322'
+                      : 'rgba(0,0,0,0.45)',
+                }}
+              >
+                {draft.length.toLocaleString()} / {REPLY_MAX.toLocaleString()}
+              </Text>
+            )}
+          </div>
         )}
       </div>
     </div>

@@ -48,6 +48,6 @@ public class AuthController {
         AuthenticatedPrincipal principal = (AuthenticatedPrincipal) authentication.getPrincipal();
         User user = userRepository.findById(principal.userId())
             .orElseThrow(() -> new IllegalStateException("Authenticated user not found"));
-        return AuthService.toDto(user);
+        return authService.toDto(user);
     }
 }

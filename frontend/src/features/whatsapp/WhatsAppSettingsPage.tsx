@@ -20,6 +20,7 @@ import {
   useUpdateWhatsappConfigMutation,
   type SendTestResponse,
 } from './whatsappApi';
+import HelpLabel from '@/shared/HelpLabel';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -125,14 +126,24 @@ export default function WhatsAppSettingsPage() {
             )}
             <Form<FormValues> form={form} layout="vertical" onFinish={onSubmit}>
               <Form.Item
-                label="Phone number ID"
+                label={
+                  <HelpLabel
+                    text="Phone number ID"
+                    hint="From Meta for Developers → your App → WhatsApp → API Setup. A 15-digit number like 123456789012345. NOT your phone number in E164 format."
+                  />
+                }
                 name="phoneNumberId"
                 rules={[{ required: true, message: 'Required' }]}
               >
                 <Input placeholder="e.g. 123456789012345" autoComplete="off" />
               </Form.Item>
               <Form.Item
-                label="Access token"
+                label={
+                  <HelpLabel
+                    text="Access token"
+                    hint="Use a System User permanent token from Business Manager → Users → System Users. Do NOT use the 24-hour temporary token from the API Setup page — it expires."
+                  />
+                }
                 name="accessToken"
                 rules={[
                   { required: true, message: 'Required' },
@@ -305,7 +316,12 @@ function ChatbotSettingsCard() {
         key={JSON.stringify(data ?? {})}
       >
         <Form.Item
-          label="System prompt"
+          label={
+            <HelpLabel
+              text="System prompt"
+              hint="Sets the bot's persona and style. Example: 'You are a friendly receptionist at Acme Dental. Be polite and helpful, never invent appointment times, and direct billing questions to a human agent.' The bot uses this as its system message on every reply."
+            />
+          }
           name="aiSystemPrompt"
           rules={[{ max: 8000, message: 'Max 8000 chars' }]}
           extra="The persona / instructions for the bot. Blank uses the platform default."
@@ -313,7 +329,12 @@ function ChatbotSettingsCard() {
           <Input.TextArea rows={6} placeholder="You are a friendly support assistant..." />
         </Form.Item>
         <Form.Item
-          label="Handoff confidence threshold"
+          label={
+            <HelpLabel
+              text="Handoff confidence threshold"
+              hint="When the bot's own confidence in its answer drops below this value (0.0–1.0), the conversation auto-flips to HUMAN_ACTIVE and waits for an agent to take over. Lower = bot tries harder before handing off. 0.5 is a sensible default."
+            />
+          }
           name="handoffConfidenceThreshold"
           rules={[
             { required: true, message: 'Required' },

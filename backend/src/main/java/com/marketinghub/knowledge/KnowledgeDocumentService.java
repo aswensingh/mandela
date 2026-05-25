@@ -1,6 +1,7 @@
 package com.marketinghub.knowledge;
 
 import com.marketinghub.auth.AuthenticatedPrincipal;
+import com.marketinghub.knowledge.dto.KnowledgeDocumentContent;
 import com.marketinghub.knowledge.dto.KnowledgeDocumentDto;
 import com.marketinghub.tenant.TenantContext;
 import org.slf4j.Logger;
@@ -67,6 +68,12 @@ public class KnowledgeDocumentService {
         doc.setFileName(file.getOriginalFilename() == null ? "upload" : file.getOriginalFilename());
         doc.setStatus(KnowledgeDocumentStatus.PROCESSING);
         doc.setCreatedByUserId(userId);
+        // Persist the original bytes so the user can download the source file later.
+        // Postgres TOASTs any column > 2 KB so storing up to 20 MB inline is fine —
+        // it doesn't bloat the main heap.
+        doc.setContent(bytes);
+        doc.setContentType(file.getContentType());
+        doc.setContentSize((long) bytes.length);
         documentRepository.save(doc);
         documentRepository.flush();
 
@@ -120,6 +127,29 @@ public class KnowledgeDocumentService {
         return documentRepository.findByIdAndTenantId(id, tenantId)
             .map(KnowledgeDocumentDto::of)
             .orElseThrow(() -> new KnowledgeDocumentNotFoundException(id));
+    }
+
+    /**
+     * Returns the original uploaded file's raw bytes + metadata for download.
+     * Throws KnowledgeDocumentNotFoundException for unknown / cross-tenant ids OR
+     * when the row predates V14 and has no stored content. The controller maps the
+     * exception to a 404 — to the caller it's all "this document isn't downloadable".
+     */
+    @Transactional(readOnly = true)
+    public KnowledgeDocumentContent download(UUID id) {
+        UUID tenantId = requireTenant();
+        KnowledgeDocument doc = documentRepository.findByIdAndTenantId(id, tenantId)
+            .orElseThrow(() -> new KnowledgeDocumentNotFoundException(id));
+        byte[] bytes = doc.getContent();
+        if (bytes == null || bytes.length == 0) {
+            // Legacy row (uploaded before V14) — no source file to give back.
+            throw new KnowledgeDocumentNotFoundException(id);
+        }
+        String ct = doc.getContentType() == null || doc.getContentType().isBlank()
+            ? "application/octet-stream"
+            : doc.getContentType();
+        long size = doc.getContentSize() != null ? doc.getContentSize() : bytes.length;
+        return new KnowledgeDocumentContent(bytes, doc.getFileName(), ct, size);
     }
 
     @Transactional

@@ -76,6 +76,7 @@ class AuthServiceTest {
         assertThat(response.refreshToken()).isEqualTo("REFRESH-TOK");
         assertThat(response.user().email()).isEqualTo("alice@example.com");
         assertThat(response.user().tenantId()).isEqualTo(tenantId);
+        assertThat(response.user().tenantName()).isEqualTo("Test"); // from activeTenant helper
         assertThat(response.user().role()).isEqualTo(UserRole.TENANT_ADMIN);
         verify(refreshTokenRepository).save(any(RefreshToken.class));
         assertThat(user.getLastLoginAt()).isNotNull();
@@ -102,6 +103,7 @@ class AuthServiceTest {
             new LoginRequest("admin@marketinghub.local", "topsecret123"));
 
         assertThat(response.user().tenantId()).isNull();
+        assertThat(response.user().tenantName()).isNull();
         assertThat(response.user().role()).isEqualTo(UserRole.PLATFORM_ADMIN);
         verify(jwtService).issueAccessToken(userId, "admin@marketinghub.local", null, UserRole.PLATFORM_ADMIN);
     }

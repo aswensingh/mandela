@@ -14,8 +14,10 @@ import {
   Typography,
   message,
 } from 'antd';
+import { PlusOutlined, RocketOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
+import TableEmpty from '@/shared/TableEmpty';
 import {
   useCancelCampaignMutation,
   useCreateCampaignMutation,
@@ -278,6 +280,21 @@ export default function CampaignsPage() {
         loading={isLoading}
         columns={columns}
         dataSource={data?.content ?? []}
+        scroll={{ x: 'max-content' }}
+        locale={{
+          emptyText: (
+            <TableEmpty
+              icon={<RocketOutlined style={{ fontSize: 42, color: 'rgba(0,0,0,0.25)' }} />}
+              title="No campaigns yet"
+              hint="A campaign is a template + a list of customers. Create one to start blasting WhatsApp messages."
+              actions={
+                <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+                  Create campaign
+                </Button>
+              }
+            />
+          ),
+        }}
         pagination={{
           current: (data?.number ?? 0) + 1,
           pageSize,
@@ -345,6 +362,7 @@ export default function CampaignsPage() {
           loading={isLoadingCustomers}
           columns={customerColumns}
           dataSource={customersPage?.content ?? []}
+          scroll={{ x: 'max-content' }}
           pagination={{ pageSize: 10 }}
           rowSelection={{
             selectedRowKeys: selectedCustomerIds,
@@ -368,8 +386,15 @@ export default function CampaignsPage() {
 }
 
 function RecipientsPanel({ campaignId }: { campaignId: string }) {
+  // Server-side pagination: lift page + pageSize into state so the user's choice
+  // in the AntD page-size dropdown actually reaches the backend. Previously this
+  // hardcoded `pageSize: 20` which AntD treats as a controlled (locked) value,
+  // so the dropdown silently no-op'd. Also previously fetched size=200 in one go
+  // which capped campaigns above 200 recipients — now the backend paginates.
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
   const { data, isLoading } = useListRecipientsQuery(
-    { id: campaignId, page: 0, size: 200 },
+    { id: campaignId, page, size: pageSize },
     { pollingInterval: 2000 },
   );
   const columns: ColumnsType<NonNullable<typeof data>['content'][number]> = [
@@ -395,7 +420,26 @@ function RecipientsPanel({ campaignId }: { campaignId: string }) {
       loading={isLoading}
       columns={columns}
       dataSource={data?.content ?? []}
-      pagination={{ pageSize: 20 }}
+      scroll={{ x: 'max-content' }}
+      pagination={{
+        current: page + 1,
+        pageSize,
+        total: data?.totalElements ?? 0,
+        showSizeChanger: true,
+        pageSizeOptions: ['10', '20', '50', '100'],
+        showTotal: (total, range) => `${range[0]}–${range[1]} of ${total}`,
+        onChange: (newPage, newPageSize) => {
+          // When pageSize changes AntD also calls onChange with the new page —
+          // we reset to page 0 in that case so the user lands somewhere sensible
+          // instead of an out-of-range page.
+          if (newPageSize !== pageSize) {
+            setPageSize(newPageSize);
+            setPage(0);
+          } else {
+            setPage(newPage - 1);
+          }
+        },
+      }}
     />
   );
 }

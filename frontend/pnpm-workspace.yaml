@@ -1,5 +1,11 @@
+# pnpm-managed settings (moved here from package.json#pnpm in pnpm v10+).
+# These two packages have postinstall scripts that need to run:
+#   esbuild — downloads its platform-specific binary
+#   @tsparticles/engine — small post-install setup
+# pnpm v10 defaults to "deny all build scripts" so we have to opt in explicitly.
 allowBuilds:
-  esbuild: set this to true or false
-onlyBuiltDependencies:
-  - esbuild
+  '@tsparticles/engine': true
+  esbuild: true
+
+# Don't bug us on every pnpm run about lockfile drift in CI containers.
 verifyDepsBeforeRun: never

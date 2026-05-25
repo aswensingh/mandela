@@ -82,6 +82,7 @@ public class TenantService {
                 savedAdmin.getEmail(),
                 savedAdmin.getFullName(),
                 savedAdmin.getTenantId(),
+                savedTenant.getName(),  // tenantName — we just created it
                 savedAdmin.getRole()
             )
         );

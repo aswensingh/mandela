@@ -13,6 +13,7 @@ import {
   Typography,
   message,
 } from 'antd';
+import { FileTextOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import {
   useCreateTemplateMutation,
@@ -23,6 +24,8 @@ import {
   type Template,
   type TemplateStatus,
 } from './templateApi';
+import TableEmpty from '@/shared/TableEmpty';
+import HelpLabel from '@/shared/HelpLabel';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -213,6 +216,21 @@ export default function TemplatesPage() {
         loading={isLoading}
         columns={columns}
         dataSource={data?.content ?? []}
+        scroll={{ x: 'max-content' }}
+        locale={{
+          emptyText: (
+            <TableEmpty
+              icon={<FileTextOutlined style={{ fontSize: 42, color: 'rgba(0,0,0,0.25)' }} />}
+              title="No templates yet"
+              hint="Templates are reusable message bodies with {name}-style placeholders. Create one to use it in a campaign."
+              actions={
+                <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+                  Create template
+                </Button>
+              }
+            />
+          ),
+        }}
         pagination={{
           current: (data?.number ?? 0) + 1,
           pageSize,
@@ -258,7 +276,12 @@ export default function TemplatesPage() {
             <Input placeholder="e.g. October promo" />
           </Form.Item>
           <Form.Item
-            label="Meta template name"
+            label={
+              <HelpLabel
+                text="Meta template name"
+                hint="This must match exactly the template name as approved by Meta in your WhatsApp Manager. Only lowercase letters, digits, and underscores. Example: 'october_promo_v2'. WhatsApp rejects messages where this doesn't match."
+              />
+            }
             name="whatsappTemplateName"
             rules={[
               { required: true, message: 'Required' },

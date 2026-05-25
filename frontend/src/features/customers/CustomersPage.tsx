@@ -13,6 +13,7 @@ import {
   Typography,
   message,
 } from 'antd';
+import { ContactsOutlined, ImportOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import {
   useCreateCustomerMutation,
@@ -24,6 +25,8 @@ import {
   type OptInStatus,
 } from './customerApi';
 import ImportCsvModal from './ImportCsvModal';
+import TableEmpty from '@/shared/TableEmpty';
+import HelpLabel from '@/shared/HelpLabel';
 
 const { Title } = Typography;
 
@@ -236,6 +239,29 @@ export default function CustomersPage() {
         loading={isLoading}
         columns={columns}
         dataSource={data?.content ?? []}
+        scroll={{ x: 'max-content' }}
+        locale={{
+          emptyText:
+            // Only show the "Get started" CTA when there are no filters set — otherwise it's
+            // misleading: customers might exist, they're just filtered out.
+            !search && !tag && !optInStatus ? (
+              <TableEmpty
+                icon={<ContactsOutlined style={{ fontSize: 42, color: 'rgba(0,0,0,0.25)' }} />}
+                title="No customers yet"
+                hint="Bulk-upload a CSV (phone_e164, full_name, tags, opt_in_status) or add them one by one."
+                actions={
+                  <Space>
+                    <Button type="primary" icon={<ImportOutlined />} onClick={() => setImportOpen(true)}>
+                      Import CSV
+                    </Button>
+                    <Button icon={<PlusOutlined />} onClick={openCreate}>
+                      Add manually
+                    </Button>
+                  </Space>
+                }
+              />
+            ) : undefined,
+        }}
         pagination={{
           current: (data?.number ?? 0) + 1,
           pageSize,
@@ -271,7 +297,12 @@ export default function CustomersPage() {
           initialValues={{ optInStatus: 'UNKNOWN' }}
         >
           <Form.Item
-            label="Phone (E.164, e.g. +12025550100)"
+            label={
+              <HelpLabel
+                text="Phone number"
+                hint="International (E.164) format: a + sign, country code, then the local number, no spaces or dashes. Example: +12025550100. WhatsApp will not accept anything else."
+              />
+            }
             name="phoneE164"
             rules={[
               { required: true, message: 'Phone is required' },
@@ -281,15 +312,31 @@ export default function CustomersPage() {
               },
             ]}
           >
-            <Input />
+            <Input placeholder="+12025550100" />
           </Form.Item>
           <Form.Item label="Full name" name="fullName">
             <Input />
           </Form.Item>
-          <Form.Item label="Tags (comma-separated)" name="tagsCsv">
+          <Form.Item
+            label={
+              <HelpLabel
+                text="Tags"
+                hint="Free-form labels you can later filter campaigns by. Comma-separated. Examples: 'vip', 'monthly-newsletter', 'due-for-checkup'."
+              />
+            }
+            name="tagsCsv"
+          >
             <Input placeholder="vip, newsletter" />
           </Form.Item>
-          <Form.Item label="Opt-in status" name="optInStatus">
+          <Form.Item
+            label={
+              <HelpLabel
+                text="Opt-in status"
+                hint="OPTED_IN = they've consented to receive promotional WhatsApp messages. Required by WhatsApp Business Platform policy before you can include them in a campaign. OPTED_OUT = they've explicitly declined. UNKNOWN = no signal either way."
+              />
+            }
+            name="optInStatus"
+          >
             <Select options={OPT_IN_OPTIONS.map((s) => ({ label: s, value: s }))} />
           </Form.Item>
         </Form>
