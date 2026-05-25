@@ -12,12 +12,15 @@ import {
   Typography,
   message,
 } from 'antd';
+import { CheckCircleOutlined, CloseCircleOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import {
   useGetChatbotConfigQuery,
   useGetWhatsappConfigQuery,
   useSendTestMessageMutation,
+  useTestWhatsappConnectionMutation,
   useUpdateChatbotConfigMutation,
   useUpdateWhatsappConfigMutation,
+  type ConnectionTestResponse,
   type SendTestResponse,
 } from './whatsappApi';
 import HelpLabel from '@/shared/HelpLabel';
@@ -44,6 +47,29 @@ export default function WhatsAppSettingsPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [lastSend, setLastSend] = useState<SendTestResponse | null>(null);
+  const [testConn, { isLoading: isTestingConn }] = useTestWhatsappConnectionMutation();
+  const [connTestResult, setConnTestResult] = useState<ConnectionTestResponse | null>(null);
+
+  const runConnectionTest = async () => {
+    setConnTestResult(null);
+    try {
+      const res = await testConn().unwrap();
+      setConnTestResult(res);
+    } catch (err) {
+      // The endpoint always returns 200 even on Meta-side failure, so this catch is
+      // only for our-side network issues (network down, backend dead, etc.).
+      const apiMsg =
+        (err as { data?: { error?: { message?: string } } })?.data?.error?.message ?? 'Test failed';
+      setConnTestResult({
+        ok: false,
+        displayPhoneNumber: null,
+        verifiedName: null,
+        qualityRating: null,
+        status: 0,
+        error: apiMsg,
+      });
+    }
+  };
 
   const onSubmit = async (values: FormValues) => {
     setSubmitError(null);
@@ -107,6 +133,67 @@ export default function WhatsAppSettingsPage() {
             {data?.tokenLastFour ? <Text code>…{data.tokenLastFour}</Text> : '—'}
           </Descriptions.Item>
         </Descriptions>
+
+        {/* Diagnostic: ping Meta with the stored creds and show what we get back.
+            Useful for catching wrong tokens / expired tokens / wrong phone-number-id
+            BEFORE attempting a real send. */}
+        <div style={{ marginTop: 16 }}>
+          <Button
+            icon={<ThunderboltOutlined />}
+            onClick={runConnectionTest}
+            loading={isTestingConn}
+            disabled={!data?.configured}
+          >
+            Test connection to Meta
+          </Button>
+          {!data?.configured && (
+            <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>
+              Save credentials first
+            </Text>
+          )}
+        </div>
+
+        {connTestResult && (
+          <Alert
+            style={{ marginTop: 12 }}
+            type={connTestResult.ok ? 'success' : 'error'}
+            showIcon
+            icon={connTestResult.ok ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
+            message={
+              connTestResult.ok
+                ? `Connected — Meta sees this number as "${connTestResult.verifiedName ?? '(unverified)'}"`
+                : `Connection failed (HTTP ${connTestResult.status ?? 0})`
+            }
+            description={
+              connTestResult.ok ? (
+                <Space direction="vertical" size={2} style={{ marginTop: 4 }}>
+                  {connTestResult.displayPhoneNumber && (
+                    <Text>
+                      Display phone: <Text code>{connTestResult.displayPhoneNumber}</Text>
+                    </Text>
+                  )}
+                  {connTestResult.qualityRating && (
+                    <Text>
+                      Quality rating:{' '}
+                      <Tag color={qualityColor(connTestResult.qualityRating)}>
+                        {connTestResult.qualityRating}
+                      </Tag>
+                    </Text>
+                  )}
+                  {connTestResult.error && (
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {connTestResult.error}
+                    </Text>
+                  )}
+                </Space>
+              ) : (
+                connTestResult.error
+              )
+            }
+            closable
+            onClose={() => setConnTestResult(null)}
+          />
+        )}
       </Card>
 
       <Card title={editing || !data?.configured ? 'Set credentials' : 'Replace credentials'}>
@@ -351,4 +438,18 @@ function ChatbotSettingsCard() {
       </Form>
     </Card>
   );
+}
+
+/** Meta returns GREEN / YELLOW / RED for the WhatsApp Business quality rating. */
+function qualityColor(rating: string): string {
+  switch (rating.toUpperCase()) {
+    case 'GREEN':
+      return 'green';
+    case 'YELLOW':
+      return 'gold';
+    case 'RED':
+      return 'red';
+    default:
+      return 'default';
+  }
 }

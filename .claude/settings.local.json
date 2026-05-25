@@ -45,7 +45,17 @@
       "Bash(curl -fsS \"http://localhost:5173/assets/index-BxFwJKM8.js\")",
       "Bash(./mvnw -B -q compile)",
       "Bash(curl -fsS http://localhost:5173/)",
-      "Bash(curl -fsS -o /dev/null -w \"frontend HTTP %{http_code}, %{size_download}b\\\\n\" http://localhost:5173/)"
+      "Bash(curl -fsS -o /dev/null -w \"frontend HTTP %{http_code}, %{size_download}b\\\\n\" http://localhost:5173/)",
+      "Bash(ngrok version *)",
+      "Bash(cloudflared --version)",
+      "Bash(ngrok config *)",
+      "Bash(winget install *)",
+      "Bash(find \"/c/Program Files\" \"/c/Program Files \\(x86\\)\" -iname \"cloudflared.exe\" 2>/dev/null | head -3)",
+      "Bash(curl -fsS -o /dev/null -w \"tunnel HTTP %{http_code}, %{size_download}b\\\\n\" https://cow-knight-gmbh-physiology.trycloudflare.com/actuator/health)",
+      "Bash(curl -fsS -o /dev/null -w \"HTTP %{http_code}\\\\n\" https://cow-knight-gmbh-physiology.trycloudflare.com/actuator/health)",
+      "Bash(curl -fsS -G http://localhost:8080/api/webhooks/whatsapp --data-urlencode hub.mode=subscribe --data-urlencode hub.verify_token=marketinghub-acme-prod-2026-verify-xyz --data-urlencode hub.challenge=test-challenge-12345 -w '\\\\nHTTP %{http_code}\\\\n')",
+      "Bash(curl -fsS -G https://cow-knight-gmbh-physiology.trycloudflare.com/api/webhooks/whatsapp --data-urlencode hub.mode=subscribe --data-urlencode hub.verify_token=marketinghub-acme-prod-2026-verify-xyz --data-urlencode hub.challenge=test-challenge-67890 -w '\\\\nHTTP %{http_code}\\\\n')",
+      "Bash(curl -sS -o /dev/null -w 'HTTP %{http_code}\\\\n' -G https://cow-knight-gmbh-physiology.trycloudflare.com/api/webhooks/whatsapp --data-urlencode hub.mode=subscribe --data-urlencode hub.verify_token=wrong-token --data-urlencode hub.challenge=test-challenge)"
     ]
   }
 }

@@ -30,6 +30,15 @@ export type SendTestResponse = {
   updatedAt: string;
 };
 
+export type ConnectionTestResponse = {
+  ok: boolean;
+  displayPhoneNumber: string | null;
+  verifiedName: string | null;
+  qualityRating: string | null;
+  status: number | null;
+  error: string | null;
+};
+
 export type ChatbotConfig = {
   aiSystemPrompt: string | null;
   handoffConfidenceThreshold: number | null;
@@ -53,6 +62,13 @@ export const whatsappApi = baseApi.injectEndpoints({
         body,
       }),
       invalidatesTags: [{ type: 'WhatsAppConfig', id: 'ME' }],
+    }),
+    testWhatsappConnection: builder.mutation<ConnectionTestResponse, void>({
+      query: () => ({
+        url: '/tenants/me/whatsapp/test',
+        method: 'POST',
+      }),
+      // No tag invalidation — this is a diagnostic; nothing changes server-side.
     }),
     sendTestMessage: builder.mutation<SendTestResponse, SendTestRequest>({
       query: (body) => ({
@@ -80,6 +96,7 @@ export const whatsappApi = baseApi.injectEndpoints({
 export const {
   useGetWhatsappConfigQuery,
   useUpdateWhatsappConfigMutation,
+  useTestWhatsappConnectionMutation,
   useSendTestMessageMutation,
   useGetChatbotConfigQuery,
   useUpdateChatbotConfigMutation,

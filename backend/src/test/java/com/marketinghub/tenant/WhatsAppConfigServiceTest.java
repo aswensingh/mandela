@@ -32,7 +32,9 @@ class WhatsAppConfigServiceTest {
     void setUp() {
         encryption = new EncryptionService(Base64.getEncoder().encodeToString(new byte[32]));
         encryption.init();
-        service = new WhatsAppConfigService(tenantRepository, encryption);
+        // Mock=true so testConnection() doesn't try to hit Meta during unrelated tests.
+        service = new WhatsAppConfigService(
+            tenantRepository, encryption, "https://graph.facebook.com/v21.0", true);
         TenantContext.setTenantId(tenantId);
     }
 
