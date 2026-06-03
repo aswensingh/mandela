@@ -125,14 +125,16 @@ public class WhatsAppWebhookService {
             root = objectMapper.readTree(rawBody);
         } catch (Exception e) {
             log.warn("Could not parse webhook JSON: {}", e.getMessage());
-            return new WebhookProcessingResult(0, 0, 0);
+            return new WebhookProcessingResult(0, 0, 0, 0, 0);
         }
         int messagesAccepted = 0;
         int messagesDeduped = 0;
+        int messagesSkipped = 0;
         int statusesApplied = 0;
+        int changesIgnoredUnknownPhoneNumber = 0;
 
         JsonNode entry = root.path("entry");
-        if (!entry.isArray()) return new WebhookProcessingResult(0, 0, 0);
+        if (!entry.isArray()) return new WebhookProcessingResult(0, 0, 0, 0, 0);
         for (JsonNode entryNode : entry) {
             JsonNode changes = entryNode.path("changes");
             if (!changes.isArray()) continue;
@@ -144,6 +146,7 @@ public class WhatsAppWebhookService {
                     : tenantRepository.findByWhatsappPhoneNumberId(phoneNumberId);
                 if (tenantOpt.isEmpty()) {
                     log.warn("Webhook for unknown phone_number_id={} — skipping", phoneNumberId);
+                    changesIgnoredUnknownPhoneNumber++;
                     continue;
                 }
                 Tenant tenant = tenantOpt.get();
@@ -154,6 +157,7 @@ public class WhatsAppWebhookService {
                         InboundOutcome o = handleInbound(tenant, m);
                         if (o == InboundOutcome.ACCEPTED) messagesAccepted++;
                         else if (o == InboundOutcome.DEDUP) messagesDeduped++;
+                        else messagesSkipped++;
                     }
                 }
 
@@ -165,7 +169,12 @@ public class WhatsAppWebhookService {
                 }
             }
         }
-        return new WebhookProcessingResult(messagesAccepted, messagesDeduped, statusesApplied);
+        return new WebhookProcessingResult(
+            messagesAccepted,
+            messagesDeduped,
+            messagesSkipped,
+            statusesApplied,
+            changesIgnoredUnknownPhoneNumber);
     }
 
     private InboundOutcome handleInbound(Tenant tenant, JsonNode msg) {
@@ -309,5 +318,11 @@ public class WhatsAppWebhookService {
     }
 
     public enum InboundOutcome { ACCEPTED, DEDUP, SKIPPED }
-    public record WebhookProcessingResult(int messagesAccepted, int messagesDeduped, int statusesApplied) {}
+    public record WebhookProcessingResult(
+        int messagesAccepted,
+        int messagesDeduped,
+        int messagesSkipped,
+        int statusesApplied,
+        int changesIgnoredUnknownPhoneNumber
+    ) {}
 }

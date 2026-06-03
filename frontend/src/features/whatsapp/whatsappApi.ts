@@ -30,6 +30,16 @@ export type SendTestResponse = {
   updatedAt: string;
 };
 
+export type SimulateInboundRequest = {
+  fromE164: string;
+  body: string;
+};
+
+export type SimulateInboundResponse = {
+  accepted: number;
+  wamid: string;
+};
+
 export type ConnectionTestResponse = {
   ok: boolean;
   displayPhoneNumber: string | null;
@@ -62,6 +72,16 @@ export const whatsappApi = baseApi.injectEndpoints({
         body,
       }),
       invalidatesTags: [{ type: 'WhatsAppConfig', id: 'ME' }],
+    }),
+    simulateInbound: builder.mutation<SimulateInboundResponse, SimulateInboundRequest>({
+      query: (body) => ({
+        url: '/tenants/me/whatsapp/simulate-inbound',
+        method: 'POST',
+        body,
+      }),
+      // Inbound creates / updates a conversation, so blow away the conversation cache
+      // — the new chat will appear when the user navigates to Conversations next.
+      invalidatesTags: [{ type: 'Conversation', id: 'LIST' }],
     }),
     testWhatsappConnection: builder.mutation<ConnectionTestResponse, void>({
       query: () => ({
@@ -97,6 +117,7 @@ export const {
   useGetWhatsappConfigQuery,
   useUpdateWhatsappConfigMutation,
   useTestWhatsappConnectionMutation,
+  useSimulateInboundMutation,
   useSendTestMessageMutation,
   useGetChatbotConfigQuery,
   useUpdateChatbotConfigMutation,

@@ -13,10 +13,12 @@ import {
   message,
 } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { Link } from 'react-router-dom';
 import {
   useGetChatbotConfigQuery,
   useGetWhatsappConfigQuery,
   useSendTestMessageMutation,
+  useSimulateInboundMutation,
   useTestWhatsappConnectionMutation,
   useUpdateChatbotConfigMutation,
   useUpdateWhatsappConfigMutation,
@@ -337,6 +339,7 @@ export default function WhatsAppSettingsPage() {
         </Form>
       </Card>
 
+      <SimulateInboundCard />
       <ChatbotSettingsCard />
     </div>
   );
@@ -433,6 +436,103 @@ function ChatbotSettingsCard() {
         <Form.Item style={{ marginBottom: 0 }}>
           <Button type="primary" htmlType="submit" loading={isSaving}>
             Save chatbot settings
+          </Button>
+        </Form.Item>
+      </Form>
+    </Card>
+  );
+}
+
+type SimulateFormValues = { fromE164: string; body: string };
+
+/**
+ * Pretend a customer just sent us a WhatsApp message. Goes through the exact same
+ * webhook → conversation → AI reply pipeline as a real inbound, but bypasses Meta
+ * entirely — useful because Meta's free test number has unreliable inbound webhook
+ * delivery in development mode. Tenant admins get a guaranteed-working test loop.
+ */
+function SimulateInboundCard() {
+  const [simulate, { isLoading }] = useSimulateInboundMutation();
+  const [form] = Form.useForm<SimulateFormValues>();
+  const [error, setError] = useState<string | null>(null);
+  const [lastResult, setLastResult] = useState<{ wamid: string; accepted: number } | null>(null);
+
+  const onFinish = async (values: SimulateFormValues) => {
+    setError(null);
+    setLastResult(null);
+    try {
+      const result = await simulate(values).unwrap();
+      setLastResult(result);
+      message.success('Inbound simulated — check Conversations');
+    } catch (err) {
+      const apiMsg =
+        (err as { data?: { error?: { message?: string } } })?.data?.error?.message ??
+        'Simulate failed';
+      setError(apiMsg);
+    }
+  };
+
+  return (
+    <Card title="Simulate inbound message" style={{ marginTop: 24 }}>
+      <Paragraph type="secondary">
+        Trigger the full receive → AI reply → outbound loop with a fake customer message.
+        Bypasses Meta's webhook delivery (which is flaky on the free test number) — useful
+        for verifying your bot reply, knowledge-base answers, and agent take-over flow
+        without burning real WhatsApp conversations.
+      </Paragraph>
+      {error && <Alert type="error" message={error} style={{ marginBottom: 12 }} showIcon />}
+      {lastResult && (
+        <Alert
+          type="success"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={
+            lastResult.accepted > 0
+              ? `Simulated message accepted (wamid: ${lastResult.wamid}).`
+              : `Webhook processed but no message stored (accepted=0). Check the phone_number_id is set correctly.`
+          }
+          description={
+            <Link to="/app/conversations">Open Conversations →</Link>
+          }
+        />
+      )}
+      <Form<SimulateFormValues>
+        form={form}
+        layout="vertical"
+        onFinish={onFinish}
+        initialValues={{ body: 'I need help with my booking' }}
+      >
+        <Form.Item
+          label={
+            <HelpLabel
+              text="Sender phone (E.164)"
+              hint="Any phone number you want the simulated customer to appear from. Doesn't have to be a real WhatsApp number — this is purely for routing inside MarketingHub."
+            />
+          }
+          name="fromE164"
+          rules={[
+            { required: true, message: 'Required' },
+            {
+              pattern: /^\+[1-9]\d{1,14}$/,
+              message: 'Must be E.164 format: + then digits',
+            },
+          ]}
+        >
+          <Input placeholder="+60172783758" autoComplete="off" />
+        </Form.Item>
+        <Form.Item
+          label="Message body (what the customer 'sent')"
+          name="body"
+          rules={[
+            { required: true, message: 'Required' },
+            { max: 4096, message: 'Max 4096 chars' },
+          ]}
+        >
+          <Input.TextArea rows={3} />
+        </Form.Item>
+        <Form.Item style={{ marginBottom: 0 }}>
+          <Button type="primary" htmlType="submit" loading={isLoading}>
+            Simulate inbound
           </Button>
         </Form.Item>
       </Form>

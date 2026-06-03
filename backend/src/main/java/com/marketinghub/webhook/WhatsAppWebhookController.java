@@ -53,8 +53,12 @@ public class WhatsAppWebhookController {
             return ResponseEntity.status(401).body("invalid signature");
         }
         WhatsAppWebhookService.WebhookProcessingResult result = service.processWebhook(rawBody);
-        log.info("Webhook processed: accepted={} deduped={} statuses={}",
-            result.messagesAccepted(), result.messagesDeduped(), result.statusesApplied());
+        log.info("Webhook processed: accepted={} deduped={} skipped={} statuses={} unknownPhoneChanges={}",
+            result.messagesAccepted(),
+            result.messagesDeduped(),
+            result.messagesSkipped(),
+            result.statusesApplied(),
+            result.changesIgnoredUnknownPhoneNumber());
         return ResponseEntity.ok("");
     }
 }

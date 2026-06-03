@@ -55,7 +55,11 @@
       "Bash(curl -fsS -o /dev/null -w \"HTTP %{http_code}\\\\n\" https://cow-knight-gmbh-physiology.trycloudflare.com/actuator/health)",
       "Bash(curl -fsS -G http://localhost:8080/api/webhooks/whatsapp --data-urlencode hub.mode=subscribe --data-urlencode hub.verify_token=marketinghub-acme-prod-2026-verify-xyz --data-urlencode hub.challenge=test-challenge-12345 -w '\\\\nHTTP %{http_code}\\\\n')",
       "Bash(curl -fsS -G https://cow-knight-gmbh-physiology.trycloudflare.com/api/webhooks/whatsapp --data-urlencode hub.mode=subscribe --data-urlencode hub.verify_token=marketinghub-acme-prod-2026-verify-xyz --data-urlencode hub.challenge=test-challenge-67890 -w '\\\\nHTTP %{http_code}\\\\n')",
-      "Bash(curl -sS -o /dev/null -w 'HTTP %{http_code}\\\\n' -G https://cow-knight-gmbh-physiology.trycloudflare.com/api/webhooks/whatsapp --data-urlencode hub.mode=subscribe --data-urlencode hub.verify_token=wrong-token --data-urlencode hub.challenge=test-challenge)"
+      "Bash(curl -sS -o /dev/null -w 'HTTP %{http_code}\\\\n' -G https://cow-knight-gmbh-physiology.trycloudflare.com/api/webhooks/whatsapp --data-urlencode hub.mode=subscribe --data-urlencode hub.verify_token=wrong-token --data-urlencode hub.challenge=test-challenge)",
+      "Bash(curl -fsS -o /dev/null -w \"tunnel HTTP %{http_code}\\\\n\" https://cow-knight-gmbh-physiology.trycloudflare.com/actuator/health)",
+      "Bash(curl -fsS -o /dev/null -w \"tunnel HTTP %{http_code}\\\\n\" https://cow-knight-gmbh-physiology.trycloudflare.com/api/webhooks/whatsapp)",
+      "Bash(curl -sS -o /dev/null -w \"tunnel root HTTP %{http_code}\\\\n\" https://cow-knight-gmbh-physiology.trycloudflare.com/actuator/health)",
+      "Bash(curl -fsS http://127.0.0.1:20241/metrics)"
     ]
   }
 }

@@ -32,6 +32,24 @@ docker compose up -d          # starts postgres, redis, rabbitmq, backend, front
 
 Wait ~15 seconds for the backend to become healthy, then open **http://localhost:5173**.
 
+Daily shortcut commands:
+
+```powershell
+npm run dev          # start Docker stack + ngrok tunnel + verify webhook handshake
+npm run dev:restart  # restart ngrok if the tunnel process is confused
+npm run dev:status   # show container health/ports
+npm run dev:logs     # follow backend logs
+npm run dev:stop     # stop ngrok + Docker containers, keeping DB volumes
+```
+
+The WhatsApp webhook callback for local testing is:
+
+```text
+https://turkey-storage-private.ngrok-free.dev/api/webhooks/whatsapp
+```
+
+Make sure Docker Desktop is running before `npm run dev`.
+
 ### Default seeded accounts
 
 | Role | Email | Password |
@@ -137,6 +155,14 @@ For the webhook to work, Meta needs to be able to reach `https://<your-domain>/a
 
 - **Local dev / first test:** `ngrok http 8080` → put the ngrok URL into Meta's webhook config.
 - **Production:** deploy to a VPS (Hetzner/DigitalOcean/Linode), put **Caddy** in front for automatic Let's Encrypt TLS.
+
+For a stable local ngrok URL, set `NGROK_STATIC_URL` in `.env` and run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\start-dev-tunnel.ps1
+```
+
+On Windows you can also double-click `scripts\start-dev-tunnel.cmd`. It starts the Docker stack, starts ngrok with the configured static URL, and verifies the public Meta webhook handshake.
 
 Detailed credentials checklist is in `docs/decisions.md` and there's a step-by-step in the Phase 9 doc.
 

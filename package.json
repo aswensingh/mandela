@@ -1,0 +1,12 @@
+{
+  "name": "marketinghub",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-dev-tunnel.ps1",
+    "dev:restart": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-dev-tunnel.ps1 -RestartNgrok",
+    "dev:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-dev.ps1",
+    "dev:status": "docker compose ps",
+    "dev:logs": "docker compose logs -f backend"
+  }
+}

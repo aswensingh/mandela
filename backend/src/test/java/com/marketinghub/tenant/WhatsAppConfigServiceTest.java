@@ -3,6 +3,7 @@ package com.marketinghub.tenant;
 import com.marketinghub.common.crypto.EncryptionService;
 import com.marketinghub.tenant.dto.UpdateWhatsAppConfigRequest;
 import com.marketinghub.tenant.dto.WhatsAppConfigStatusDto;
+import com.marketinghub.webhook.WhatsAppWebhookService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,7 @@ import static org.mockito.Mockito.when;
 class WhatsAppConfigServiceTest {
 
     @Mock private TenantRepository tenantRepository;
+    @Mock private WhatsAppWebhookService webhookService;
 
     private EncryptionService encryption;
     private WhatsAppConfigService service;
@@ -34,7 +36,8 @@ class WhatsAppConfigServiceTest {
         encryption.init();
         // Mock=true so testConnection() doesn't try to hit Meta during unrelated tests.
         service = new WhatsAppConfigService(
-            tenantRepository, encryption, "https://graph.facebook.com/v21.0", true);
+            tenantRepository, encryption, webhookService,
+            "https://graph.facebook.com/v21.0", true);
         TenantContext.setTenantId(tenantId);
     }
 

@@ -3,9 +3,12 @@ package com.marketinghub.tenant;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marketinghub.common.crypto.EncryptionService;
+import com.marketinghub.tenant.dto.SimulateInboundRequest;
+import com.marketinghub.tenant.dto.SimulateInboundResponse;
 import com.marketinghub.tenant.dto.UpdateWhatsAppConfigRequest;
 import com.marketinghub.tenant.dto.WhatsAppConfigStatusDto;
 import com.marketinghub.tenant.dto.WhatsAppConnectionTestResponse;
+import com.marketinghub.webhook.WhatsAppWebhookService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,6 +28,7 @@ public class WhatsAppConfigService {
 
     private final TenantRepository tenantRepository;
     private final EncryptionService encryptionService;
+    private final WhatsAppWebhookService webhookService;
     private final String metaBaseUrl;
     private final boolean whatsAppMock;
     private final RestClient restClient;
@@ -33,11 +37,13 @@ public class WhatsAppConfigService {
     public WhatsAppConfigService(
         TenantRepository tenantRepository,
         EncryptionService encryptionService,
+        WhatsAppWebhookService webhookService,
         @Value("${whatsapp.api.base-url:https://graph.facebook.com/v21.0}") String metaBaseUrl,
         @Value("${whatsapp.mock:false}") boolean whatsAppMock
     ) {
         this.tenantRepository = tenantRepository;
         this.encryptionService = encryptionService;
+        this.webhookService = webhookService;
         this.metaBaseUrl = metaBaseUrl;
         this.whatsAppMock = whatsAppMock;
         this.restClient = RestClient.create();
@@ -146,6 +152,75 @@ public class WhatsAppConfigService {
             return WhatsAppConnectionTestResponse.failure(0,
                 "Could not reach Meta: " + e.getMessage());
         }
+    }
+
+    /**
+     * QA / demo helper: pretends a customer just sent us a WhatsApp message.
+     *
+     * Builds a Meta-shaped webhook payload using the tenant's own
+     * {@code phone_number_id} so it routes back to the same tenant, then hands
+     * the bytes directly to {@link WhatsAppWebhookService#processWebhook} —
+     * skipping the HTTP layer + HMAC check (we trust ourselves). From there
+     * the normal pipeline takes over: conversation created/updated, AI worker
+     * fires, and (if Meta lets us) a reply goes back to the customer's number.
+     *
+     * Useful because Meta's free test number has unreliable webhook delivery
+     * for real inbound traffic in development mode — this gives tenant admins
+     * a guaranteed-working test loop without Meta in the path.
+     */
+    @Transactional
+    public SimulateInboundResponse simulateInbound(SimulateInboundRequest request) {
+        Tenant tenant = currentTenant();
+        String phoneNumberId = tenant.getWhatsappPhoneNumberId();
+        if (phoneNumberId == null || phoneNumberId.isBlank()) {
+            throw new IllegalStateException(
+                "Tenant has no WhatsApp Phone Number ID configured");
+        }
+        // Strip the leading '+' for the wa_id / from fields (Meta uses digits only).
+        String waId = request.fromE164().startsWith("+")
+            ? request.fromE164().substring(1)
+            : request.fromE164();
+        String wamid = "wamid.SIM-" + java.util.UUID.randomUUID();
+
+        java.util.Map<String, Object> payload = java.util.Map.of(
+            "object", "whatsapp_business_account",
+            "entry", java.util.List.of(java.util.Map.of(
+                "id", tenant.getId().toString(),
+                "changes", java.util.List.of(java.util.Map.of(
+                    "field", "messages",
+                    "value", java.util.Map.of(
+                        "messaging_product", "whatsapp",
+                        "metadata", java.util.Map.of(
+                            "display_phone_number", "+1 555-201-6223",
+                            "phone_number_id", phoneNumberId
+                        ),
+                        "contacts", java.util.List.of(java.util.Map.of(
+                            "profile", java.util.Map.of("name", "Simulated " + waId),
+                            "wa_id", waId
+                        )),
+                        "messages", java.util.List.of(java.util.Map.of(
+                            "from", waId,
+                            "id", wamid,
+                            "timestamp", String.valueOf(java.time.Instant.now().getEpochSecond()),
+                            "type", "text",
+                            "text", java.util.Map.of("body", request.body())
+                        ))
+                    )
+                ))
+            ))
+        );
+
+        byte[] body;
+        try {
+            body = jsonMapper.writeValueAsBytes(payload);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to serialise simulate payload", e);
+        }
+
+        com.marketinghub.webhook.WhatsAppWebhookService.WebhookProcessingResult result =
+            webhookService.processWebhook(body);
+        log.info("Simulate inbound for tenant {} → accepted={}", tenant.getId(), result.messagesAccepted());
+        return new SimulateInboundResponse(result.messagesAccepted(), wamid);
     }
 
     /**

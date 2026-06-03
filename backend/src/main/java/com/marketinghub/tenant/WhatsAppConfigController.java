@@ -1,5 +1,7 @@
 package com.marketinghub.tenant;
 
+import com.marketinghub.tenant.dto.SimulateInboundRequest;
+import com.marketinghub.tenant.dto.SimulateInboundResponse;
 import com.marketinghub.tenant.dto.UpdateWhatsAppConfigRequest;
 import com.marketinghub.tenant.dto.WhatsAppConfigStatusDto;
 import com.marketinghub.tenant.dto.WhatsAppConnectionTestResponse;
@@ -42,5 +44,18 @@ public class WhatsAppConfigController {
     @PostMapping("/test")
     public WhatsAppConnectionTestResponse test() {
         return service.testConnection();
+    }
+
+    /**
+     * Pretend a customer just sent us a WhatsApp message. Goes through the
+     * exact same webhook → conversation → AI reply pipeline as a real inbound,
+     * but skips Meta's flaky dev-mode webhook delivery entirely. Useful for
+     * end-to-end QA testing of the bot loop.
+     */
+    @PostMapping("/simulate-inbound")
+    public SimulateInboundResponse simulateInbound(
+        @Valid @RequestBody SimulateInboundRequest request
+    ) {
+        return service.simulateInbound(request);
     }
 }

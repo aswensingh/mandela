@@ -76,7 +76,7 @@ export default function ConversationsPage() {
 
   const listCard = (
     <Card
-      styles={{ body: { padding: 0 } }}
+      styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 } }}
       style={{ height: paneHeight, display: 'flex', flexDirection: 'column' }}
     >
       <Tabs
@@ -85,7 +85,7 @@ export default function ConversationsPage() {
         items={TAB_ITEMS.map((t) => ({ key: t.key, label: t.label }))}
         style={{ padding: '0 12px' }}
       />
-      <div style={{ overflow: 'auto', flex: 1 }}>
+      <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
         {isLoading ? (
           <Skeleton active style={{ padding: 16 }} />
         ) : conversations.length === 0 ? (
@@ -109,7 +109,7 @@ export default function ConversationsPage() {
   const threadCard = (
     <Card
       style={{ height: paneHeight, display: 'flex', flexDirection: 'column' }}
-      styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', flex: 1 } }}
+      styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 } }}
     >
       {!selected ? (
         <div
@@ -297,7 +297,7 @@ function ConversationThread({
   const canSend = controllable && isHumanActive && draft.trim().length > 0 && !sendState.isLoading;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       <div
         style={{
           borderBottom: '1px solid #f0f0f0',
@@ -381,6 +381,7 @@ function ConversationThread({
       <div
         style={{
           flex: 1,
+          minHeight: 0,
           overflow: 'auto',
           padding: 16,
           background: '#fafafa',
