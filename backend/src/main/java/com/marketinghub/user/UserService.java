@@ -1,7 +1,7 @@
 package com.marketinghub.user;
 
 import com.marketinghub.auth.AuthenticatedPrincipal;
-import com.marketinghub.auth.EmailAlreadyUsedException;
+import com.marketinghub.auth.UsernameAlreadyUsedException;
 import com.marketinghub.auth.RefreshTokenRepository;
 import com.marketinghub.auth.User;
 import com.marketinghub.auth.UserRepository;
@@ -72,11 +72,11 @@ public class UserService {
         if (request.role() == UserRole.PLATFORM_ADMIN) {
             throw new InvalidRoleException("Cannot create PLATFORM_ADMIN inside a tenant");
         }
-        if (userRepository.existsByTenantIdAndEmail(tenantId, request.email())) {
-            throw new EmailAlreadyUsedException(request.email());
+        if (userRepository.existsByTenantIdAndUsername(tenantId, request.username())) {
+            throw new UsernameAlreadyUsedException(request.username());
         }
         User user = new User();
-        user.setEmail(request.email());
+        user.setUsername(request.username());
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setFullName(request.fullName());
         user.setRole(request.role());
@@ -182,10 +182,10 @@ public class UserService {
         target.setPasswordHash(passwordEncoder.encode(finalPassword));
         int revoked = refreshTokenRepository.revokeAllActiveForUser(target.getId(), Instant.now());
 
-        log.info("Password reset for user {} (email={}) by {} (generated={}, revoked {} sessions)",
-            target.getId(), target.getEmail(), caller.email(), generated, revoked);
+        log.info("Password reset for user {} (username={}) by {} (generated={}, revoked {} sessions)",
+            target.getId(), target.getUsername(), caller.username(), generated, revoked);
 
-        return new ResetPasswordResponse(target.getId(), target.getEmail(), finalPassword, generated);
+        return new ResetPasswordResponse(target.getId(), target.getUsername(), finalPassword, generated);
     }
 
     private static String generatePassword() {
@@ -208,7 +208,7 @@ public class UserService {
         return new UserSummaryDto(
             user.getId(),
             user.getTenantId(),
-            user.getEmail(),
+            user.getUsername(),
             user.getFullName(),
             user.getRole(),
             user.getStatus(),

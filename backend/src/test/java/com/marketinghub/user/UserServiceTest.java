@@ -1,7 +1,7 @@
 package com.marketinghub.user;
 
 import com.marketinghub.auth.AuthenticatedPrincipal;
-import com.marketinghub.auth.EmailAlreadyUsedException;
+import com.marketinghub.auth.UsernameAlreadyUsedException;
 import com.marketinghub.auth.RefreshTokenRepository;
 import com.marketinghub.auth.User;
 import com.marketinghub.auth.UserRepository;
@@ -64,7 +64,7 @@ class UserServiceTest {
 
     @Test
     void createUser_savesWithTenantScope() {
-        when(userRepository.existsByTenantIdAndEmail(TENANT_A, "agent@a.com")).thenReturn(false);
+        when(userRepository.existsByTenantIdAndUsername(TENANT_A, "agent")).thenReturn(false);
         when(userRepository.save(any(User.class))).thenAnswer(inv -> {
             User u = inv.getArgument(0);
             u.setId(UUID.randomUUID());
@@ -72,7 +72,7 @@ class UserServiceTest {
         });
 
         UserSummaryDto dto = userService.createUser(new CreateUserRequest(
-            "agent@a.com", "agentpass123", "Agent A", UserRole.AGENT));
+            "agent", "agentpass123", "Agent A", UserRole.AGENT));
 
         assertThat(dto.tenantId()).isEqualTo(TENANT_A);
         assertThat(dto.role()).isEqualTo(UserRole.AGENT);
@@ -85,17 +85,17 @@ class UserServiceTest {
     @Test
     void createUser_rejectsPlatformAdmin() {
         assertThatThrownBy(() -> userService.createUser(new CreateUserRequest(
-            "hack@a.com", "hackpass123", "Hack", UserRole.PLATFORM_ADMIN)))
+            "hack", "hackpass123", "Hack", UserRole.PLATFORM_ADMIN)))
             .isInstanceOf(InvalidRoleException.class);
         verify(userRepository, never()).save(any());
     }
 
     @Test
-    void createUser_rejectsDuplicateEmailInTenant() {
-        when(userRepository.existsByTenantIdAndEmail(TENANT_A, "dup@a.com")).thenReturn(true);
+    void createUser_rejectsDuplicateUsernameInTenant() {
+        when(userRepository.existsByTenantIdAndUsername(TENANT_A, "dup")).thenReturn(true);
         assertThatThrownBy(() -> userService.createUser(new CreateUserRequest(
-            "dup@a.com", "duppass123", "Dup", UserRole.AGENT)))
-            .isInstanceOf(EmailAlreadyUsedException.class);
+            "dup", "duppass123", "Dup", UserRole.AGENT)))
+            .isInstanceOf(UsernameAlreadyUsedException.class);
         verify(userRepository, never()).save(any());
     }
 
@@ -304,7 +304,7 @@ class UserServiceTest {
     void resetPassword_agent_isRejected() {
         UUID targetId = UUID.randomUUID();
         AuthenticatedPrincipal agent = new AuthenticatedPrincipal(
-            UUID.randomUUID(), "agent@a.com", TENANT_A, UserRole.AGENT);
+            UUID.randomUUID(), "agent", TENANT_A, UserRole.AGENT);
         User target = stub(UserRole.AGENT);
         target.setId(targetId);
         target.setTenantId(TENANT_A);
@@ -319,7 +319,7 @@ class UserServiceTest {
         User u = new User();
         u.setId(UUID.randomUUID());
         u.setTenantId(TENANT_A);
-        u.setEmail("u@a.com");
+        u.setUsername("u");
         u.setFullName("U");
         u.setRole(role);
         u.setStatus(UserStatus.ACTIVE);

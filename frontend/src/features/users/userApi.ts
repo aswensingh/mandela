@@ -6,7 +6,7 @@ export type UserStatus = 'ACTIVE' | 'DISABLED';
 export type TenantUser = {
   id: string;
   tenantId: string;
-  email: string;
+  username: string;
   fullName: string;
   role: UserRole;
   status: UserStatus;
@@ -15,7 +15,7 @@ export type TenantUser = {
 };
 
 export type CreateUserRequest = {
-  email: string;
+  username: string;
   password: string;
   fullName: string;
   role: UserRole;
@@ -34,7 +34,7 @@ export type ResetPasswordArgs = {
 
 export type ResetPasswordResponse = {
   userId: string;
-  email: string;
+  username: string;
   newPassword: string;
   generated: boolean;
 };

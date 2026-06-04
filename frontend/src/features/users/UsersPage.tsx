@@ -28,7 +28,7 @@ import ResetPasswordModal from './ResetPasswordModal';
 const { Title } = Typography;
 
 type CreateFormValues = {
-  email: string;
+  username: string;
   password: string;
   fullName: string;
   role: UserRole;
@@ -73,7 +73,7 @@ export default function UsersPage() {
     setCreateError(null);
     try {
       await createUser(values).unwrap();
-      message.success(`User "${values.email}" created`);
+      message.success(`User "${values.username}" created`);
       createForm.resetFields();
       setCreateOpen(false);
     } catch (err) {
@@ -99,14 +99,14 @@ export default function UsersPage() {
   const onDisable = async (record: TenantUser) => {
     try {
       await disableUser(record.id).unwrap();
-      message.success(`Disabled ${record.email}`);
+      message.success(`Disabled ${record.username}`);
     } catch (err) {
       message.error(extractMessage(err, 'Failed to disable user'));
     }
   };
 
   const columns: ColumnsType<TenantUser> = [
-    { title: 'Email', dataIndex: 'email', key: 'email' },
+    { title: 'Username', dataIndex: 'username', key: 'username' },
     { title: 'Full Name', dataIndex: 'fullName', key: 'fullName' },
     {
       title: 'Role',
@@ -150,7 +150,7 @@ export default function UsersPage() {
           </Button>
           {record.status === 'ACTIVE' && (
             <Popconfirm
-              title={`Disable ${record.email}?`}
+              title={`Disable ${record.username}?`}
               description="Their refresh tokens will be revoked."
               okText="Disable"
               okButtonProps={{ danger: true }}
@@ -230,12 +230,9 @@ export default function UsersPage() {
           initialValues={{ role: 'AGENT' }}
         >
           <Form.Item
-            label="Email"
-            name="email"
-            rules={[
-              { required: true, message: 'Email is required' },
-              { type: 'email', message: 'Invalid email' },
-            ]}
+            label="Username"
+            name="username"
+            rules={[{ required: true, message: 'Username is required' }]}
           >
             <Input autoComplete="off" />
           </Form.Item>
@@ -269,7 +266,7 @@ export default function UsersPage() {
       </Modal>
 
       <Modal
-        title={editing ? `Edit ${editing.email}` : 'Edit'}
+        title={editing ? `Edit ${editing.username}` : 'Edit'}
         open={editing !== null}
         onCancel={() => {
           setEditing(null);
@@ -309,7 +306,7 @@ export default function UsersPage() {
       <ResetPasswordModal
         open={resetTarget !== null}
         userId={resetTarget?.id ?? null}
-        userEmail={resetTarget?.email ?? null}
+        username={resetTarget?.username ?? null}
         onClose={() => setResetTarget(null)}
       />
     </div>

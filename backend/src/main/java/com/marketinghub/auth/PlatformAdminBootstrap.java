@@ -16,18 +16,18 @@ public class PlatformAdminBootstrap implements ApplicationRunner {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final String adminEmail;
+    private final String adminUsername;
     private final String adminPassword;
 
     public PlatformAdminBootstrap(
         UserRepository userRepository,
         PasswordEncoder passwordEncoder,
-        @Value("${platform-admin.email:}") String adminEmail,
+        @Value("${platform-admin.username:}") String adminUsername,
         @Value("${platform-admin.password:}") String adminPassword
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
-        this.adminEmail = adminEmail;
+        this.adminUsername = adminUsername;
         this.adminPassword = adminPassword;
     }
 
@@ -38,22 +38,22 @@ public class PlatformAdminBootstrap implements ApplicationRunner {
             log.info("Platform admin already present — skipping bootstrap");
             return;
         }
-        if (adminEmail == null || adminEmail.isBlank()
+        if (adminUsername == null || adminUsername.isBlank()
             || adminPassword == null || adminPassword.isBlank()) {
             log.warn(
-                "No platform admin exists and PLATFORM_ADMIN_EMAIL / PLATFORM_ADMIN_PASSWORD "
+                "No platform admin exists and PLATFORM_ADMIN_USERNAME / PLATFORM_ADMIN_PASSWORD "
                     + "are unset — cannot bootstrap. Set them in your .env to enable login."
             );
             return;
         }
         User admin = new User();
-        admin.setEmail(adminEmail);
+        admin.setUsername(adminUsername);
         admin.setPasswordHash(passwordEncoder.encode(adminPassword));
         admin.setFullName("Platform Admin");
         admin.setRole(UserRole.PLATFORM_ADMIN);
         admin.setStatus(UserStatus.ACTIVE);
         admin.setTenantId(null);
         userRepository.save(admin);
-        log.info("Bootstrapped platform admin: {}", adminEmail);
+        log.info("Bootstrapped platform admin: {}", adminUsername);
     }
 }

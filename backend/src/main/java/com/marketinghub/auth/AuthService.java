@@ -43,8 +43,8 @@ public class AuthService {
 
     @Transactional
     public AuthResponse login(LoginRequest request) {
-        User user = userRepository.findByEmail(request.email())
-            .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
+        User user = userRepository.findByUsername(request.username())
+            .orElseThrow(() -> new BadCredentialsException("Invalid username or password"));
         if (user.getStatus() != UserStatus.ACTIVE) {
             throw new BadCredentialsException("Account is disabled");
         }
@@ -57,7 +57,7 @@ public class AuthService {
             }
         }
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            throw new BadCredentialsException("Invalid email or password");
+            throw new BadCredentialsException("Invalid username or password");
         }
         user.setLastLoginAt(Instant.now());
         return issueTokenPair(user);
@@ -92,7 +92,7 @@ public class AuthService {
 
     private AuthResponse issueTokenPair(User user) {
         String accessToken = jwtService.issueAccessToken(
-            user.getId(), user.getEmail(), user.getTenantId(), user.getRole());
+            user.getId(), user.getUsername(), user.getTenantId(), user.getRole());
         String refreshTokenPlain = jwtService.issueRefreshToken();
         RefreshToken refresh = new RefreshToken();
         refresh.setUserId(user.getId());
@@ -112,7 +112,7 @@ public class AuthService {
         }
         return new UserDto(
             user.getId(),
-            user.getEmail(),
+            user.getUsername(),
             user.getFullName(),
             user.getTenantId(),
             tenantName,

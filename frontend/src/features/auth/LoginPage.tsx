@@ -9,7 +9,7 @@ import LoginParticles from './LoginParticles';
 const { Content } = Layout;
 const { Title, Text } = Typography;
 
-type FormValues = { email: string; password: string };
+type FormValues = { username: string; password: string };
 
 export default function LoginPage() {
   const [login, { isLoading }] = useLoginMutation();
@@ -82,14 +82,11 @@ export default function LoginPage() {
           )}
           <Form layout="vertical" onFinish={onFinish} autoComplete="off">
             <Form.Item
-              label="Email"
-              name="email"
-              rules={[
-                { required: true, message: 'Email is required' },
-                { type: 'email', message: 'Invalid email' },
-              ]}
+              label="Username"
+              name="username"
+              rules={[{ required: true, message: 'Username is required' }]}
             >
-              <Input autoComplete="email" />
+              <Input autoComplete="username" />
             </Form.Item>
             <Form.Item
               label="Password"

@@ -12,10 +12,10 @@ APP_SECRET='local-app-secret-67890'  # matches .env WHATSAPP_APP_SECRET
 step() { echo; echo "================ $* ================"; }
 
 login() {
-  local email="$1" password="$2"
+  local username="$1" password="$2"
   curl -fsS -X POST "$BASE/api/auth/login" \
     -H "Content-Type: application/json" \
-    -d "{\"email\":\"$email\",\"password\":\"$password\"}" \
+    -d "{\"username\":\"$username\",\"password\":\"$password\"}" \
     | sed -E 's/.*"accessToken":"([^"]+)".*/\1/'
 }
 
@@ -37,8 +37,8 @@ send_inbound() {
 }
 
 step "1. Login as Acme TENANT_ADMIN + as Acme AGENT"
-ACME_ADMIN_TOKEN=$(login acme@acme.com acme12345)
-ACME_AGENT_TOKEN=$(login agent1@acme.com agent12345)
+ACME_ADMIN_TOKEN=$(login acme acme12345)
+ACME_AGENT_TOKEN=$(login agent1 agent12345)
 echo "admin token len=${#ACME_ADMIN_TOKEN}, agent token len=${#ACME_AGENT_TOKEN}"
 
 step "2. Ensure verifier customer exists (ignore duplicate)"

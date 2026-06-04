@@ -65,9 +65,9 @@ public class TenantService {
         Tenant savedTenant = tenantRepository.save(tenant);
 
         User admin = new User();
-        admin.setEmail(request.initialAdminEmail());
+        admin.setUsername(request.initialAdminUsername());
         admin.setPasswordHash(passwordEncoder.encode(request.initialAdminPassword()));
-        admin.setFullName(request.initialAdminEmail());
+        admin.setFullName(request.initialAdminUsername());
         admin.setRole(UserRole.TENANT_ADMIN);
         admin.setStatus(UserStatus.ACTIVE);
         admin.setTenantId(savedTenant.getId());
@@ -79,7 +79,7 @@ public class TenantService {
             toDto(savedTenant),
             new UserDto(
                 savedAdmin.getId(),
-                savedAdmin.getEmail(),
+                savedAdmin.getUsername(),
                 savedAdmin.getFullName(),
                 savedAdmin.getTenantId(),
                 savedTenant.getName(),  // tenantName — we just created it
@@ -111,7 +111,7 @@ public class TenantService {
         Map<UUID, List<TenantAdminDto>> grouped = new HashMap<>();
         for (User u : admins) {
             grouped.computeIfAbsent(u.getTenantId(), k -> new ArrayList<>())
-                .add(new TenantAdminDto(u.getId(), u.getEmail()));
+                .add(new TenantAdminDto(u.getId(), u.getUsername()));
         }
         return grouped;
     }
@@ -257,7 +257,7 @@ public class TenantService {
             .findAllByTenantIdInAndRoleAndStatus(Set.of(tenant.getId()),
                 UserRole.TENANT_ADMIN, UserStatus.ACTIVE)
             .stream()
-            .map(u -> new TenantAdminDto(u.getId(), u.getEmail()))
+            .map(u -> new TenantAdminDto(u.getId(), u.getUsername()))
             .collect(Collectors.toList());
         return toDto(tenant, admins);
     }

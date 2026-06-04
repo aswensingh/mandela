@@ -70,8 +70,10 @@ security:
     access-token-ttl-minutes: 15
     refresh-token-ttl-days: 7
 platform-admin:
-  email: ${PLATFORM_ADMIN_EMAIL:}
+  username: ${PLATFORM_ADMIN_USERNAME:}
   password: ${PLATFORM_ADMIN_PASSWORD:}
+demo-seed:
+  enabled: ${DEMO_SEED_ENABLED:false}
 app:
   encryption:
     master-key: ${ENCRYPTION_MASTER_KEY}

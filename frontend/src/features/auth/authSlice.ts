@@ -4,7 +4,7 @@ export type UserRole = 'PLATFORM_ADMIN' | 'TENANT_ADMIN' | 'AGENT' | 'VIEWER';
 
 export type AuthUser = {
   id: string;
-  email: string;
+  username: string;
   fullName: string;
   tenantId: string | null;
   tenantName: string | null; // null for platform admins

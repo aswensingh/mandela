@@ -67,11 +67,11 @@ class TenantServiceTest {
         });
 
         CreateTenantResponse response = tenantService.createTenant(new CreateTenantRequest(
-            "Acme Dental", "dental", "admin@acme.com", "supersecret"));
+            "Acme Dental", "dental", "acme", "supersecret"));
 
         assertThat(response.tenant().id()).isEqualTo(tenantId);
         assertThat(response.tenant().name()).isEqualTo("Acme Dental");
-        assertThat(response.initialAdmin().email()).isEqualTo("admin@acme.com");
+        assertThat(response.initialAdmin().username()).isEqualTo("acme");
         assertThat(response.initialAdmin().role()).isEqualTo(UserRole.TENANT_ADMIN);
         assertThat(response.initialAdmin().tenantId()).isEqualTo(tenantId);
 
@@ -224,19 +224,19 @@ class TenantServiceTest {
         User admin1 = new User();
         admin1.setId(UUID.randomUUID());
         admin1.setTenantId(t1);
-        admin1.setEmail("acme-admin@a.com");
+        admin1.setUsername("acme-admin");
         admin1.setRole(UserRole.TENANT_ADMIN);
         admin1.setStatus(UserStatus.ACTIVE);
         User admin1b = new User();
         admin1b.setId(UUID.randomUUID());
         admin1b.setTenantId(t1);
-        admin1b.setEmail("acme-admin2@a.com");
+        admin1b.setUsername("acme-admin2");
         admin1b.setRole(UserRole.TENANT_ADMIN);
         admin1b.setStatus(UserStatus.ACTIVE);
         User admin2 = new User();
         admin2.setId(UUID.randomUUID());
         admin2.setTenantId(t2);
-        admin2.setEmail("beta-admin@b.com");
+        admin2.setUsername("beta-admin");
         admin2.setRole(UserRole.TENANT_ADMIN);
         admin2.setStatus(UserStatus.ACTIVE);
 
@@ -253,10 +253,10 @@ class TenantServiceTest {
             .filter(t -> t.id().equals(t1)).findFirst().orElseThrow();
         TenantDto dtoT2 = page.getContent().stream()
             .filter(t -> t.id().equals(t2)).findFirst().orElseThrow();
-        assertThat(dtoT1.admins()).extracting(TenantAdminDto::email)
-            .containsExactlyInAnyOrder("acme-admin@a.com", "acme-admin2@a.com");
-        assertThat(dtoT2.admins()).extracting(TenantAdminDto::email)
-            .containsExactly("beta-admin@b.com");
+        assertThat(dtoT1.admins()).extracting(TenantAdminDto::username)
+            .containsExactlyInAnyOrder("acme-admin", "acme-admin2");
+        assertThat(dtoT2.admins()).extracting(TenantAdminDto::username)
+            .containsExactly("beta-admin");
     }
 
     @Test

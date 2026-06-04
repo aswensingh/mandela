@@ -110,14 +110,14 @@ export default function AppLayout() {
     setDrawerOpen(false);
   };
 
-  // Avatar initials: prefer first letter of full name, fall back to first letter of email.
+  // Avatar initials: prefer first letter of full name, fall back to first letter of username.
   const initials = useMemo(() => {
-    const source = user?.fullName ?? user?.email ?? '?';
+    const source = user?.fullName ?? user?.username ?? '?';
     const parts = source.split(/[\s@.]+/).filter(Boolean);
     if (parts.length === 0) return '?';
     if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
     return (parts[0]![0]! + parts[1]![0]!).toUpperCase();
-  }, [user?.fullName, user?.email]);
+  }, [user?.fullName, user?.username]);
 
   const dropdownRender = () => (
     <div
@@ -134,7 +134,7 @@ export default function AppLayout() {
           {user?.fullName}
         </Text>
         <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
-          {user?.email}
+          {user?.username}
         </Text>
         <Space size={6} style={{ marginTop: 8, flexWrap: 'wrap' }}>
           {user?.role && <Tag color={ROLE_COLOR[user.role]}>{user.role}</Tag>}

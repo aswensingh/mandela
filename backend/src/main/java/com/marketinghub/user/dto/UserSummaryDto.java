@@ -9,7 +9,7 @@ import java.util.UUID;
 public record UserSummaryDto(
     UUID id,
     UUID tenantId,
-    String email,
+    String username,
     String fullName,
     UserRole role,
     UserStatus status,

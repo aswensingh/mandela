@@ -1,7 +1,7 @@
 import { baseApi } from '@/services/baseApi';
 import type { AuthUser, Credentials } from './authSlice';
 
-type LoginRequest = { email: string; password: string };
+type LoginRequest = { username: string; password: string };
 type RefreshRequest = { refreshToken: string };
 
 export const authApi = baseApi.injectEndpoints({

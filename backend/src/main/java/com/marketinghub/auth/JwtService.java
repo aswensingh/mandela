@@ -62,7 +62,7 @@ public class JwtService {
      * we keep using JJWT for parsing (parseAndValidate) since standard JWS verification
      * is unaffected by how the token was created.
      */
-    public String issueAccessToken(UUID userId, String email, UUID tenantId, UserRole role) {
+    public String issueAccessToken(UUID userId, String username, UUID tenantId, UserRole role) {
         Instant now = Instant.now();
         Instant expiry = now.plus(Duration.ofMinutes(accessTtlMinutes));
 
@@ -72,7 +72,7 @@ public class JwtService {
 
         Map<String, Object> claims = new LinkedHashMap<>();
         claims.put("sub", userId.toString());
-        claims.put("email", email);
+        claims.put("username", username);
         claims.put("role", role.name());
         claims.put("tenantId", tenantId == null ? null : tenantId.toString());
         claims.put("iat", now.getEpochSecond());

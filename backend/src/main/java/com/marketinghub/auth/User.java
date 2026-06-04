@@ -26,8 +26,8 @@ public class User {
     @Column(name = "tenant_id")
     private UUID tenantId;
 
-    @Column(name = "email", nullable = false, columnDefinition = "citext")
-    private String email;
+    @Column(name = "username", nullable = false, columnDefinition = "citext")
+    private String username;
 
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
@@ -60,8 +60,8 @@ public class User {
     public UUID getTenantId() { return tenantId; }
     public void setTenantId(UUID tenantId) { this.tenantId = tenantId; }
 
-    public String getEmail() { return email; }
-    public void setEmail(String email) { this.email = email; }
+    public String getUsername() { return username; }
+    public void setUsername(String username) { this.username = username; }
 
     public String getPasswordHash() { return passwordHash; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }

@@ -1,6 +1,6 @@
 package com.marketinghub.common;
 
-import com.marketinghub.auth.EmailAlreadyUsedException;
+import com.marketinghub.auth.UsernameAlreadyUsedException;
 import com.marketinghub.auth.InvalidRefreshTokenException;
 import com.marketinghub.campaign.CampaignNotFoundException;
 import com.marketinghub.campaign.InvalidCampaignStateException;
@@ -46,10 +46,10 @@ public class GlobalExceptionHandler {
             .body(ApiError.of("VALIDATION_FAILED", message, traceId()));
     }
 
-    @ExceptionHandler(EmailAlreadyUsedException.class)
-    public ResponseEntity<ApiError> handleEmailUsed(EmailAlreadyUsedException ex) {
+    @ExceptionHandler(UsernameAlreadyUsedException.class)
+    public ResponseEntity<ApiError> handleUsernameUsed(UsernameAlreadyUsedException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-            .body(ApiError.of("EMAIL_ALREADY_USED", ex.getMessage(), traceId()));
+            .body(ApiError.of("USERNAME_ALREADY_USED", ex.getMessage(), traceId()));
     }
 
     @ExceptionHandler(InvalidRefreshTokenException.class)

@@ -40,13 +40,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             try {
                 Claims claims = jwtService.parseAndValidate(token);
                 UUID userId = UUID.fromString(claims.getSubject());
-                String email = claims.get("email", String.class);
+                String username = claims.get("username", String.class);
                 String tenantIdClaim = claims.get("tenantId", String.class);
                 UUID tenantId = tenantIdClaim == null ? null : UUID.fromString(tenantIdClaim);
                 String roleClaim = claims.get("role", String.class);
                 UserRole role = roleClaim == null ? null : UserRole.valueOf(roleClaim);
                 AuthenticatedPrincipal principal =
-                    new AuthenticatedPrincipal(userId, email, tenantId, role);
+                    new AuthenticatedPrincipal(userId, username, tenantId, role);
                 List<SimpleGrantedAuthority> authorities = role == null
                     ? List.of()
                     : List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));

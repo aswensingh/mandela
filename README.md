@@ -19,47 +19,53 @@ Typical clients are small-to-mid businesses doing direct customer engagement —
 
 ---
 
-## Quick start (local development)
+## Getting started (new developer)
 
-You need: **Docker Desktop**, **Java 25**, **Node 24**, **Maven 3.9+**.
+Everything runs in Docker — you don't need Java, Node, or Maven installed locally just to run the app. (You only need those if you want to run the backend/frontend outside containers.)
+
+**Prerequisites:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) (with Docker Compose v2). Make sure it's running.
+
+**1. Clone and configure:**
 
 ```bash
 git clone <this repo>
 cd marketinghub
-cp .env.example .env          # already includes safe local defaults
-docker compose up -d          # starts postgres, redis, rabbitmq, backend, frontend
+cp .env.example .env     # safe local defaults — runs in mock mode, no API keys needed
 ```
 
-Wait ~15 seconds for the backend to become healthy, then open **http://localhost:5173**.
+**2. Start the whole stack:**
 
-Daily shortcut commands:
-
-```powershell
-npm run dev          # start Docker stack + ngrok tunnel + verify webhook handshake
-npm run dev:restart  # restart ngrok if the tunnel process is confused
-npm run dev:status   # show container health/ports
-npm run dev:logs     # follow backend logs
-npm run dev:stop     # stop ngrok + Docker containers, keeping DB volumes
+```bash
+docker compose up -d --build   # postgres, redis, rabbitmq, backend, frontend
 ```
 
-The WhatsApp webhook callback for local testing is:
+First run takes a couple of minutes (it builds the images and runs DB migrations + seed data). Watch progress with `docker compose logs -f backend`.
 
-```text
-https://turkey-storage-private.ngrok-free.dev/api/webhooks/whatsapp
+**3. Open the app:** once the backend is healthy, go to **http://localhost:5173** and log in (see accounts below).
+
+**Useful commands:**
+
+```bash
+docker compose ps              # container health / ports
+docker compose logs -f backend # follow backend logs
+docker compose down            # stop containers, keep the database
+docker compose down -v         # stop AND wipe the database — next `up` re-seeds from scratch
 ```
 
-Make sure Docker Desktop is running before `npm run dev`.
+> **Resetting:** the demo accounts and customers are seeded once, into an empty database. If you change seed logic or want a clean slate, run `docker compose down -v` then `docker compose up -d --build`.
 
-### Default seeded accounts
+### Default accounts
 
-| Role | Email | Password |
+Login is by **username** (not email). On a fresh database (`DEMO_SEED_ENABLED=true`, the default in `.env.example`) these accounts are created for you:
+
+| Role | Username | Password |
 |---|---|---|
-| Platform Admin | `admin@marketinghub.local` | `change-me-locally` |
-| Acme Tenant Admin | `acme@acme.com` | `acme12345` |
-| Acme Agent | `agent1@acme.com` | `agent12345` |
-| Beta Tenant Admin | `beta@beta.com` | `beta12345` |
+| Platform Admin | `admin` | `admin` |
+| Acme Tenant Admin | `acme` | `acme12345` |
+| Acme Agent | `agent1` | `agent12345` |
+| Beta Tenant Admin | `beta` | `beta12345` |
 
-The seed data also includes ~2 000 fake customers under each tenant so you can immediately try the Customers page, template creation, and campaign launches.
+The platform admin comes from `PLATFORM_ADMIN_USERNAME` / `PLATFORM_ADMIN_PASSWORD` in your `.env`; the two demo tenants (**Acme**, **Beta**), their accounts, and ~2 000 fake customers each come from the demo seeder (toggle with `DEMO_SEED_ENABLED`). The customers let you immediately try the Customers page, template creation, and campaign launches.
 
 ### Mock mode (default)
 
@@ -77,11 +83,11 @@ To switch to real services, see [Going live](#going-live) below.
 
 ### As Platform Admin
 
-1. Log in with `admin@marketinghub.local`.
+1. Log in with the `admin` account.
 2. **Tenants** menu → see all client workspaces. Each row shows the tenant's admins.
-3. Click **Create Tenant** to onboard a new client — provide a name, industry, and the first admin's email + password.
+3. Click **Create Tenant** to onboard a new client — provide a name, industry, and the first admin's username + password.
 4. Hand those credentials to the client. They take it from there.
-5. If a client forgets their password, click the 🔑 icon next to their email — you can generate a random password or set one, then convey it to them.
+5. If a client forgets their password, click the 🔑 icon next to their username — you can generate a random password or set one, then convey it to them.
 6. Lifecycle actions per tenant:
    - **Suspend** — they can't log in but data stays.
    - **Delete** — soft delete; tenant disappears from the default list. Toggle "Show deleted" to see them.
@@ -156,13 +162,17 @@ For the webhook to work, Meta needs to be able to reach `https://<your-domain>/a
 - **Local dev / first test:** `ngrok http 8080` → put the ngrok URL into Meta's webhook config.
 - **Production:** deploy to a VPS (Hetzner/DigitalOcean/Linode), put **Caddy** in front for automatic Let's Encrypt TLS.
 
-For a stable local ngrok URL, set `NGROK_STATIC_URL` in `.env` and run:
+For a stable local ngrok URL, set `NGROK_STATIC_URL` in `.env`. The repo ships npm wrappers (Windows/PowerShell) that bring up the Docker stack **and** the tunnel together:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\start-dev-tunnel.ps1
+npm run dev          # start Docker stack + ngrok tunnel + verify webhook handshake
+npm run dev:restart  # restart ngrok if the tunnel process gets confused
+npm run dev:status   # show container health/ports
+npm run dev:logs     # follow backend logs
+npm run dev:stop     # stop ngrok + Docker containers, keeping DB volumes
 ```
 
-On Windows you can also double-click `scripts\start-dev-tunnel.cmd`. It starts the Docker stack, starts ngrok with the configured static URL, and verifies the public Meta webhook handshake.
+`npm run dev` is just a convenience wrapper around `scripts\start-dev-tunnel.ps1` (on Windows you can also double-click `scripts\start-dev-tunnel.cmd`): it starts the Docker stack, starts ngrok with the configured static URL, and verifies the public Meta webhook handshake. Make sure Docker Desktop is running first. The webhook callback Meta should point at is `https://<your-ngrok-domain>/api/webhooks/whatsapp`.
 
 Detailed credentials checklist is in `docs/decisions.md` and there's a step-by-step in the Phase 9 doc.
 

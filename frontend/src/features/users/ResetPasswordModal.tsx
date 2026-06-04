@@ -19,7 +19,7 @@ const { Text, Paragraph } = Typography;
 type Props = {
   open: boolean;
   userId: string | null;
-  userEmail: string | null; // shown in the dialog so admin knows who they're resetting
+  username: string | null; // shown in the dialog so admin knows who they're resetting
   onClose: () => void;
 };
 
@@ -32,7 +32,7 @@ type Props = {
  * Used from both the Users page (tenant admin scope) and the Tenants page (platform admin
  * resets a tenant admin) — they target the same backend endpoint.
  */
-export default function ResetPasswordModal({ open, userId, userEmail, onClose }: Props) {
+export default function ResetPasswordModal({ open, userId, username, onClose }: Props) {
   const [mode, setMode] = useState<'generate' | 'custom'>('generate');
   const [customPassword, setCustomPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -103,9 +103,9 @@ export default function ResetPasswordModal({ open, userId, userEmail, onClose }:
     >
       {!result && (
         <>
-          {userEmail && (
+          {username && (
             <Paragraph>
-              You are about to reset the password for <Text strong>{userEmail}</Text>. Any open
+              You are about to reset the password for <Text strong>{username}</Text>. Any open
               sessions for this user will be terminated.
             </Paragraph>
           )}
@@ -134,7 +134,7 @@ export default function ResetPasswordModal({ open, userId, userEmail, onClose }:
         <>
           <Alert
             type="success"
-            message={`Password ${result.generated ? 'generated' : 'set'} for ${result.email}.`}
+            message={`Password ${result.generated ? 'generated' : 'set'} for ${result.username}.`}
             description="Copy it now — it will not be shown again. Convey it to the user out-of-band (in person, on a call, etc.) and ask them to change it on their next login (currently change-password isn't self-service, so they'd ask you to reset again)."
             showIcon
             style={{ marginBottom: 12 }}

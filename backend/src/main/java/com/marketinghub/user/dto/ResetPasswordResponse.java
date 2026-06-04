@@ -9,7 +9,7 @@ import java.util.UUID;
  */
 public record ResetPasswordResponse(
     UUID userId,
-    String email,
+    String username,
     String newPassword,
     boolean generated
 ) {}

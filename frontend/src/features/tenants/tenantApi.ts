@@ -4,7 +4,7 @@ export type TenantStatus = 'ACTIVE' | 'SUSPENDED' | 'DELETED';
 
 export type TenantAdmin = {
   id: string;
-  email: string;
+  username: string;
 };
 
 export type Tenant = {
@@ -20,7 +20,7 @@ export type Tenant = {
 export type CreateTenantRequest = {
   name: string;
   industry?: string;
-  initialAdminEmail: string;
+  initialAdminUsername: string;
   initialAdminPassword: string;
 };
 
@@ -28,7 +28,7 @@ export type CreateTenantResponse = {
   tenant: Tenant;
   initialAdmin: {
     id: string;
-    email: string;
+    username: string;
     fullName: string;
     tenantId: string;
     role: 'TENANT_ADMIN';

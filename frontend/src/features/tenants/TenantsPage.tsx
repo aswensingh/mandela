@@ -34,7 +34,7 @@ const { Title, Text } = Typography;
 type CreateFormValues = {
   name: string;
   industry?: string;
-  initialAdminEmail: string;
+  initialAdminUsername: string;
   initialAdminPassword: string;
 };
 
@@ -83,7 +83,7 @@ export default function TenantsPage() {
       await createTenant({
         name: values.name,
         industry: values.industry,
-        initialAdminEmail: values.initialAdminEmail,
+        initialAdminUsername: values.initialAdminUsername,
         initialAdminPassword: values.initialAdminPassword,
       }).unwrap();
       message.success(`Tenant "${values.name}" created`);
@@ -144,8 +144,8 @@ export default function TenantsPage() {
           <Space direction="vertical" size={2}>
             {record.admins.map((a) => (
               <Space key={a.id} size={4}>
-                <Text>{a.email}</Text>
-                <Tooltip title={`Reset password for ${a.email}`}>
+                <Text>{a.username}</Text>
+                <Tooltip title={`Reset password for ${a.username}`}>
                   <Button
                     type="text"
                     size="small"
@@ -298,12 +298,9 @@ export default function TenantsPage() {
             <Input placeholder="dental, restaurant, casino, ..." />
           </Form.Item>
           <Form.Item
-            label="Initial admin email"
-            name="initialAdminEmail"
-            rules={[
-              { required: true, message: 'Email is required' },
-              { type: 'email', message: 'Invalid email' },
-            ]}
+            label="Initial admin username"
+            name="initialAdminUsername"
+            rules={[{ required: true, message: 'Username is required' }]}
           >
             <Input autoComplete="off" />
           </Form.Item>
@@ -367,7 +364,7 @@ export default function TenantsPage() {
       <ResetPasswordModal
         open={resetAdmin !== null}
         userId={resetAdmin?.id ?? null}
-        userEmail={resetAdmin?.email ?? null}
+        username={resetAdmin?.username ?? null}
         onClose={() => setResetAdmin(null)}
       />
     </div>

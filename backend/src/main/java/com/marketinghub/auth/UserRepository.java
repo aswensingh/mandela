@@ -10,10 +10,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface UserRepository extends JpaRepository<User, UUID> {
-    Optional<User> findByEmail(String email);
+    Optional<User> findByUsername(String username);
     Optional<User> findByIdAndTenantId(UUID id, UUID tenantId);
     Page<User> findAllByTenantId(UUID tenantId, Pageable pageable);
-    boolean existsByTenantIdAndEmail(UUID tenantId, String email);
+    boolean existsByTenantIdAndUsername(UUID tenantId, String username);
     boolean existsByRole(UserRole role);
 
     // Batch load all users with a given role across a set of tenants. Used to populate the
