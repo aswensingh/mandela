@@ -90,7 +90,9 @@ public class DemoDataSeeder implements ApplicationRunner {
         if (whatsappPhoneNumberId != null) {
             tenant.setWhatsappPhoneNumberId(whatsappPhoneNumberId);
         }
-        return tenantRepository.save(tenant);
+        // saveAndFlush so the row is visible to the raw-JDBC customer insert later in this same
+        // transaction — a plain save() only flushes at commit, after seedCustomers' FK check.
+        return tenantRepository.saveAndFlush(tenant);
     }
 
     private void createUser(String username, String password, String fullName, UserRole role, UUID tenantId) {
