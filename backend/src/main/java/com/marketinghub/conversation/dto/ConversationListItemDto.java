@@ -18,5 +18,7 @@ public record ConversationListItemDto(
     String lastMessageBody,
     MessageDirection lastMessageDirection,
     SenderType lastMessageSenderType,
-    Instant createdAt
+    Instant createdAt,
+    String handoffReason,
+    Double handoffConfidence
 ) {}

@@ -27,6 +27,7 @@ import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import java.util.Base64;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -83,7 +84,7 @@ class CampaignSendWorkerTest {
     @Test
     void mockMode_happyPath_recordsSentAndAdvancesCampaign() throws Exception {
         when(apiClient.isMockMode()).thenReturn(true);
-        when(apiClient.sendText(any(), any(), eq("+14155550100"), anyString()))
+        when(apiClient.sendTemplate(any(), any(), eq("+14155550100"), any(), any(), any()))
             .thenReturn("wamid.MOCK-abc");
 
         AtomicReference<Message> savedMessage = new AtomicReference<>();
@@ -124,7 +125,7 @@ class CampaignSendWorkerTest {
     @Test
     void mockMode_failure_recordsFailedRowAndAdvancesCampaign() throws Exception {
         when(apiClient.isMockMode()).thenReturn(true);
-        when(apiClient.sendText(any(), any(), anyString(), anyString()))
+        when(apiClient.sendTemplate(any(), any(), anyString(), any(), any(), any()))
             .thenThrow(new WhatsAppApiException("Meta API 400: nope"));
 
         AtomicReference<Message> savedMessage = new AtomicReference<>();
@@ -175,7 +176,7 @@ class CampaignSendWorkerTest {
 
         worker.onMessage(envelope("+14155550100", "Hi"));
 
-        verify(apiClient, never()).sendText(any(), any(), any(), any());
+        verify(apiClient, never()).sendTemplate(any(), any(), any(), any(), any(), any());
         assertThat(messageCap.getValue().getStatus()).isEqualTo(MessageStatus.FAILED);
         assertThat(recipient.getStatus()).isEqualTo(CampaignRecipientStatus.FAILED);
         assertThat(recipient.getErrorMessage()).contains("credentials");
@@ -184,7 +185,7 @@ class CampaignSendWorkerTest {
     @Test
     void doesNotCompleteCampaign_whenSomePendingRemain() throws Exception {
         when(apiClient.isMockMode()).thenReturn(true);
-        when(apiClient.sendText(any(), any(), anyString(), anyString())).thenReturn("wamid.MOCK-x");
+        when(apiClient.sendTemplate(any(), any(), anyString(), any(), any(), any())).thenReturn("wamid.MOCK-x");
         when(messageRepository.save(any(Message.class))).thenAnswer(inv -> inv.getArgument(0));
 
         CampaignRecipient recipient = stubRecipient(RECIPIENT, CAMPAIGN, CUSTOMER);
@@ -218,6 +219,8 @@ class CampaignSendWorkerTest {
     }
 
     private static CampaignSendMessage envelope(String to, String body) {
-        return new CampaignSendMessage(TENANT, CAMPAIGN, RECIPIENT, CUSTOMER, TEMPLATE, to, body);
+        return new CampaignSendMessage(
+            TENANT, CAMPAIGN, RECIPIENT, CUSTOMER, TEMPLATE, to, body,
+            "promo_template", "en", List.of("Jane"));
     }
 }

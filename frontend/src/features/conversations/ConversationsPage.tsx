@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   Alert,
   Button,
@@ -8,21 +8,26 @@ import {
   Input,
   Layout,
   List,
+  Popconfirm,
   Skeleton,
   Space,
+  Switch,
   Tabs,
   Tag,
   Tooltip,
   Typography,
   message as antMessage,
 } from 'antd';
-import { ArrowLeftOutlined, SendOutlined } from '@ant-design/icons';
-import { useAppSelector } from '@/app/hooks';
+import { ArrowLeftOutlined, DeleteOutlined, ReloadOutlined, SendOutlined } from '@ant-design/icons';
+import { useAppDispatch, useAppSelector } from '@/app/hooks';
+import { setDebugInfoVisible } from '@/features/ui/uiSlice';
 import type { UserRole } from '@/features/auth/authSlice';
 import {
+  useDeleteConversationMutation,
   useListConversationsQuery,
   useListMessagesQuery,
   useReleaseConversationMutation,
+  useResetBotContextMutation,
   useSendAgentMessageMutation,
   useTakeOverConversationMutation,
   type ConversationFilter,
@@ -54,6 +59,8 @@ export default function ConversationsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const role = useAppSelector((s) => s.auth.user?.role);
+  const dispatch = useAppDispatch();
+  const debugInfoVisible = useAppSelector((s) => s.ui.debugInfoVisible);
   const screens = useBreakpoint();
   const isMobile = !screens.md;
 
@@ -128,6 +135,7 @@ export default function ConversationsPage() {
           role={role}
           isMobile={isMobile}
           onBack={() => setSelectedId(null)}
+          onDeleted={() => setSelectedId(null)}
         />
       )}
     </Card>
@@ -139,10 +147,32 @@ export default function ConversationsPage() {
           back-button + customer name inside the thread already act as the header. */}
       {!showThreadOnMobile && (
         <>
-          <Title level={isMobile ? 4 : 3} style={{ marginTop: 0 }}>
-            Conversations
-          </Title>
-          <Paragraph type="secondary" style={{ marginBottom: 16 }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 8,
+            }}
+          >
+            <Title level={isMobile ? 4 : 3} style={{ margin: 0 }}>
+              Conversations
+            </Title>
+            <Tooltip title="Show/hide AI confidence + auto-handoff reason. Turn OFF for demos.">
+              <Space size={8}>
+                <Switch
+                  size="small"
+                  checked={debugInfoVisible}
+                  onChange={(v) => dispatch(setDebugInfoVisible(v))}
+                />
+                <Text type="secondary" style={{ fontSize: 13 }}>
+                  AI debug info
+                </Text>
+              </Space>
+            </Tooltip>
+          </div>
+          <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 16 }}>
             Inbound WhatsApp messages land here. List auto-refreshes every 5 seconds.
           </Paragraph>
         </>
@@ -233,12 +263,15 @@ function ConversationThread({
   role,
   isMobile,
   onBack,
+  onDeleted,
 }: {
   conversation: ConversationListItem;
   role: UserRole | undefined;
   isMobile: boolean;
   onBack: () => void;
+  onDeleted: () => void;
 }) {
+  const debugInfoVisible = useAppSelector((s) => s.ui.debugInfoVisible);
   const { data, isLoading } = useListMessagesQuery(
     { id: conversation.id, page: 0, size: 200 },
     { pollingInterval: POLL_INTERVAL_MS },
@@ -248,6 +281,8 @@ function ConversationThread({
 
   const [takeOver, takeOverState] = useTakeOverConversationMutation();
   const [release, releaseState] = useReleaseConversationMutation();
+  const [resetBotContext, resetState] = useResetBotContextMutation();
+  const [deleteConversation, deleteState] = useDeleteConversationMutation();
   const [sendMessage, sendState] = useSendAgentMessageMutation();
 
   const [draft, setDraft] = useState('');
@@ -255,6 +290,22 @@ function ConversationThread({
   useEffect(() => {
     setDraft('');
   }, [conversation.id]);
+
+  // Auto-scroll the message list to the latest message.
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  // On open / switch (and once messages finish loading): jump straight to the bottom.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [conversation.id, isLoading]);
+  // On new messages (polling): follow them — but only if the user is already near the
+  // bottom, so we don't yank them away while they're scrolled up reading history.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (nearBottom) el.scrollTop = el.scrollHeight;
+  }, [messages]);
 
   const controllable = canControl(role);
   const isClosed = conversation.status === 'CLOSED';
@@ -276,6 +327,25 @@ function ConversationThread({
       antMessage.success('Released back to bot.');
     } catch (err) {
       antMessage.error(extractError(err, 'Failed to release conversation'));
+    }
+  };
+
+  const onResetBot = async () => {
+    try {
+      await resetBotContext(conversation.id).unwrap();
+      antMessage.success("Bot context reset — it will start fresh on the next reply.");
+    } catch (err) {
+      antMessage.error(extractError(err, 'Failed to reset bot context'));
+    }
+  };
+
+  const onDelete = async () => {
+    try {
+      await deleteConversation(conversation.id).unwrap();
+      antMessage.success('Conversation deleted — chat history cleared.');
+      onDeleted();
+    } catch (err) {
+      antMessage.error(extractError(err, 'Failed to delete conversation'));
     }
   };
 
@@ -337,9 +407,39 @@ function ConversationThread({
               </Text>
               <StatusTag status={conversation.status} />
             </Space>
+            {debugInfoVisible && handoffNote(conversation) && (
+              <div>
+                <Text style={{ fontSize: 11, color: '#d46b08' }}>
+                  ⚠ {handoffNote(conversation)}
+                </Text>
+              </div>
+            )}
           </div>
         </Space>
         <Space>
+          {!isClosed && controllable && (
+            <Popconfirm
+              title="Reset bot context?"
+              description={
+                <div style={{ maxWidth: 280 }}>
+                  The bot will forget everything said so far in this conversation and start
+                  fresh on the next reply. The visible message history stays intact.
+                </div>
+              }
+              okText="Reset"
+              cancelText="Cancel"
+              onConfirm={onResetBot}
+            >
+              <Tooltip title="Wipe the bot's memory for this conversation">
+                <Button
+                  icon={<ReloadOutlined />}
+                  loading={resetState.isLoading}
+                >
+                  Reset Bot
+                </Button>
+              </Tooltip>
+            </Popconfirm>
+          )}
           {isBotActive && (
             <Tooltip
               title={
@@ -376,9 +476,32 @@ function ConversationThread({
               Conversation is closed
             </Text>
           )}
+          {controllable && (
+            <Popconfirm
+              title="Delete this conversation?"
+              description={
+                <div style={{ maxWidth: 300 }}>
+                  Permanently deletes the entire chat history with this customer. The
+                  customer record is kept, so you can re-test with the same number. This
+                  cannot be undone.
+                </div>
+              }
+              okText="Delete"
+              okButtonProps={{ danger: true }}
+              cancelText="Cancel"
+              onConfirm={onDelete}
+            >
+              <Tooltip title="Delete the whole conversation (clean slate)">
+                <Button danger icon={<DeleteOutlined />} loading={deleteState.isLoading}>
+                  Delete
+                </Button>
+              </Tooltip>
+            </Popconfirm>
+          )}
         </Space>
       </div>
       <div
+        ref={scrollRef}
         style={{
           flex: 1,
           minHeight: 0,
@@ -464,6 +587,7 @@ function ConversationThread({
 }
 
 function MessageBubble({ message }: { message: ConversationMessage }) {
+  const debugInfoVisible = useAppSelector((s) => s.ui.debugInfoVisible);
   const isOut = message.direction === 'OUT';
   const bubbleBg = isOut ? '#1677ff' : '#fff';
   const bubbleColor = isOut ? '#fff' : 'rgba(0,0,0,0.88)';
@@ -493,6 +617,15 @@ function MessageBubble({ message }: { message: ConversationMessage }) {
               {' · '}
               <Tag color={statusColor(message.status)} style={{ marginRight: 0 }}>
                 {message.status}
+              </Tag>
+            </>
+          )}
+          {/* DEBUG: AI confidence per bot reply — gated by the "AI debug info" toggle. */}
+          {debugInfoVisible && message.aiConfidence != null && (
+            <>
+              {' · '}
+              <Tag color={confidenceColor(message.aiConfidence)} style={{ marginRight: 0 }}>
+                conf {message.aiConfidence.toFixed(2)}
               </Tag>
             </>
           )}
@@ -534,6 +667,30 @@ function StatusTag({ status, style }: { status: ConversationListItem['status']; 
       {label}
     </Tag>
   );
+}
+
+// DEBUG helper: human-readable explanation of why a conversation is in HUMAN mode.
+function handoffNote(c: ConversationListItem): string | null {
+  if (c.status !== 'HUMAN_ACTIVE' || !c.handoffReason) return null;
+  const conf =
+    c.handoffConfidence != null ? ` · confidence ${c.handoffConfidence.toFixed(2)}` : '';
+  switch (c.handoffReason) {
+    case 'MODEL_REQUESTED':
+      return `Auto handed-off: bot requested a human${conf}`;
+    case 'LOW_CONFIDENCE':
+      return `Auto handed-off: low confidence${conf}`;
+    case 'MANUAL_TAKEOVER':
+      return 'Taken over by agent';
+    default:
+      return `Handed off (${c.handoffReason})${conf}`;
+  }
+}
+
+// DEBUG helper: colour the confidence tag green/gold/red. Remove with the tag itself.
+function confidenceColor(c: number): string {
+  if (c >= 0.8) return 'green';
+  if (c >= 0.5) return 'gold';
+  return 'red';
 }
 
 function statusColor(s: ConversationMessage['status']): string {

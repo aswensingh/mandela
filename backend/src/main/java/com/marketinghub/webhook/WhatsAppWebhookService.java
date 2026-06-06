@@ -2,6 +2,9 @@ package com.marketinghub.webhook;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.marketinghub.campaign.CampaignRecipient;
+import com.marketinghub.campaign.CampaignRecipientRepository;
+import com.marketinghub.campaign.CampaignRecipientStatus;
 import com.marketinghub.conversation.Conversation;
 import com.marketinghub.conversation.ConversationRepository;
 import com.marketinghub.conversation.ConversationStatus;
@@ -48,6 +51,7 @@ public class WhatsAppWebhookService {
     private final ConversationRepository conversationRepository;
     private final MessageRepository messageRepository;
     private final WebhookEventRepository webhookEventRepository;
+    private final CampaignRecipientRepository recipientRepository;
     private final ObjectMapper objectMapper;
     private final RabbitTemplate rabbitTemplate;
 
@@ -60,6 +64,7 @@ public class WhatsAppWebhookService {
         ConversationRepository conversationRepository,
         MessageRepository messageRepository,
         WebhookEventRepository webhookEventRepository,
+        CampaignRecipientRepository recipientRepository,
         ObjectMapper objectMapper,
         RabbitTemplate rabbitTemplate,
         @Value("${whatsapp.webhook.verify-token:}") String verifyToken,
@@ -70,6 +75,7 @@ public class WhatsAppWebhookService {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.webhookEventRepository = webhookEventRepository;
+        this.recipientRepository = recipientRepository;
         this.objectMapper = objectMapper;
         this.rabbitTemplate = rabbitTemplate;
         this.verifyToken = verifyToken == null ? "" : verifyToken;
@@ -266,18 +272,85 @@ public class WhatsAppWebhookService {
         String wamid = s.path("id").asText(null);
         String status = s.path("status").asText(null);
         if (wamid == null || status == null) return false;
-        Optional<Message> existing = messageRepository.findByWhatsappMessageId(wamid);
-        if (existing.isEmpty()) {
-            log.debug("Status update for unknown wamid={} — ignoring", wamid);
-            return false;
-        }
         MessageStatus next = mapMetaStatus(status);
         if (next == null) return false;
-        Message m = existing.get();
-        // Don't downgrade — Meta sometimes sends out-of-order updates.
-        if (statusRank(next) <= statusRank(m.getStatus())) return false;
-        m.setStatus(next);
-        return true;
+        // Meta attaches the reason on a 'failed' status — capture it so failures are explainable
+        // instead of a silent FAILED with no detail.
+        String error = next == MessageStatus.FAILED ? extractStatusError(s) : null;
+
+        boolean applied = false;
+
+        // 1) The messages row (any outbound: bot, agent, or campaign). Don't downgrade —
+        //    Meta sometimes sends out-of-order updates.
+        Optional<Message> existing = messageRepository.findByWhatsappMessageId(wamid);
+        if (existing.isPresent()) {
+            Message m = existing.get();
+            if (statusRank(next) > statusRank(m.getStatus())) {
+                m.setStatus(next);
+                if (error != null) m.setErrorMessage(error);
+                applied = true;
+            }
+        } else {
+            log.debug("Status update for unknown message wamid={}", wamid);
+        }
+
+        // 2) Mirror onto the campaign recipient, if this wamid came from a campaign send, so
+        //    campaign stats reflect real delivery (and show WHY a send failed).
+        Optional<CampaignRecipient> ro = recipientRepository.findByWhatsappMessageId(wamid);
+        if (ro.isPresent()) {
+            CampaignRecipient r = ro.get();
+            CampaignRecipientStatus rNext = mapRecipientStatus(next);
+            if (rNext != null && recipientRank(rNext) > recipientRank(r.getStatus())) {
+                r.setStatus(rNext);
+                if (error != null) r.setErrorMessage(error);
+                applied = true;
+            }
+        }
+
+        return applied;
+    }
+
+    /** Builds a concise reason string from Meta's status {@code errors[]} array. */
+    private static String extractStatusError(JsonNode s) {
+        JsonNode errors = s.path("errors");
+        if (errors.isArray() && errors.size() > 0) {
+            JsonNode e = errors.get(0);
+            String code = e.path("code").asText("");
+            String title = e.path("title").asText("");
+            String detail = e.path("error_data").path("details").asText("");
+            StringBuilder sb = new StringBuilder();
+            if (!code.isBlank()) sb.append('[').append(code).append("] ");
+            if (!title.isBlank()) sb.append(title);
+            if (!detail.isBlank()) sb.append(" — ").append(detail);
+            String out = sb.toString().trim();
+            if (!out.isEmpty()) return truncate(out, 1000);
+        }
+        return "Delivery failed (no detail from Meta)";
+    }
+
+    private static CampaignRecipientStatus mapRecipientStatus(MessageStatus s) {
+        return switch (s) {
+            case SENT -> CampaignRecipientStatus.SENT;
+            case DELIVERED -> CampaignRecipientStatus.DELIVERED;
+            case READ -> CampaignRecipientStatus.READ;
+            case FAILED -> CampaignRecipientStatus.FAILED;
+            case QUEUED -> null;
+        };
+    }
+
+    private static int recipientRank(CampaignRecipientStatus s) {
+        return switch (s) {
+            case PENDING -> 0;
+            case SENT -> 1;
+            case DELIVERED -> 2;
+            case READ -> 3;
+            case FAILED -> 4;
+        };
+    }
+
+    private static String truncate(String str, int max) {
+        if (str == null) return null;
+        return str.length() <= max ? str : str.substring(0, max);
     }
 
     private static MessageStatus mapMetaStatus(String metaStatus) {

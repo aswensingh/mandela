@@ -2,6 +2,7 @@ package com.marketinghub.tenant;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.marketinghub.common.TestToolsGuard;
 import com.marketinghub.common.crypto.EncryptionService;
 import com.marketinghub.tenant.dto.SimulateInboundRequest;
 import com.marketinghub.tenant.dto.SimulateInboundResponse;
@@ -29,6 +30,7 @@ public class WhatsAppConfigService {
     private final TenantRepository tenantRepository;
     private final EncryptionService encryptionService;
     private final WhatsAppWebhookService webhookService;
+    private final TestToolsGuard testToolsGuard;
     private final String metaBaseUrl;
     private final boolean whatsAppMock;
     private final RestClient restClient;
@@ -38,12 +40,14 @@ public class WhatsAppConfigService {
         TenantRepository tenantRepository,
         EncryptionService encryptionService,
         WhatsAppWebhookService webhookService,
+        TestToolsGuard testToolsGuard,
         @Value("${whatsapp.api.base-url:https://graph.facebook.com/v21.0}") String metaBaseUrl,
         @Value("${whatsapp.mock:false}") boolean whatsAppMock
     ) {
         this.tenantRepository = tenantRepository;
         this.encryptionService = encryptionService;
         this.webhookService = webhookService;
+        this.testToolsGuard = testToolsGuard;
         this.metaBaseUrl = metaBaseUrl;
         this.whatsAppMock = whatsAppMock;
         this.restClient = RestClient.create();
@@ -60,7 +64,8 @@ public class WhatsAppConfigService {
             int n = plaintext.length();
             lastFour = n <= 4 ? plaintext : plaintext.substring(n - 4);
         }
-        return new WhatsAppConfigStatusDto(configured, tenant.getWhatsappPhoneNumberId(), lastFour);
+        return new WhatsAppConfigStatusDto(configured, tenant.getWhatsappPhoneNumberId(), lastFour,
+            testToolsGuard.enabled());
     }
 
     @Transactional
@@ -70,7 +75,8 @@ public class WhatsAppConfigService {
         tenant.setWhatsappAccessTokenEncrypted(encryptionService.encrypt(request.accessToken()));
         int n = request.accessToken().length();
         String lastFour = n <= 4 ? request.accessToken() : request.accessToken().substring(n - 4);
-        return new WhatsAppConfigStatusDto(true, tenant.getWhatsappPhoneNumberId(), lastFour);
+        return new WhatsAppConfigStatusDto(true, tenant.getWhatsappPhoneNumberId(), lastFour,
+            testToolsGuard.enabled());
     }
 
     /**

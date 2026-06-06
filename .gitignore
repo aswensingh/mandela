@@ -12,8 +12,8 @@ dist/
 .vite/
 *.tsbuildinfo
 
-# Env
-.env
+# Env — .env is intentionally tracked (private, solo repo). Local override
+# variants stay ignored so a stray .env.local can't get committed by accident.
 .env.local
 .env.*.local
 

@@ -14,24 +14,25 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Real Spring AI -> OpenAI implementation. Only registered when ai.mock=false AND the
- * OpenAI auto-config has produced a ChatModel bean (i.e. OPENAI_API_KEY is set).
+ * Real Spring AI -> LLM implementation. Provider-agnostic: it wraps whatever {@link ChatModel}
+ * Spring AI auto-configures (OpenAI by default). Only registered when {@code ai.mock=false}
+ * AND a ChatModel bean exists.
  *
- * Uses Spring AI's BeanOutputConverter under the covers (via .entity()) — the JSON
- * schema for {@link BotReply} is injected into the prompt and the response is parsed
- * back into the record.
+ * Uses Spring AI's BeanOutputConverter under the covers (via .entity()) — the JSON schema for
+ * {@link BotReply} is injected into the prompt and the response is parsed back into the record.
  */
 @Component
 @ConditionalOnProperty(name = "ai.mock", havingValue = "false")
-public class OpenAIChatClient implements AIChatClient {
+public class LlmChatClient implements AIChatClient {
 
-    private static final Logger log = LoggerFactory.getLogger(OpenAIChatClient.class);
+    private static final Logger log = LoggerFactory.getLogger(LlmChatClient.class);
 
     private final ChatClient chatClient;
 
-    public OpenAIChatClient(ChatModel chatModel) {
+    public LlmChatClient(ChatModel chatModel) {
         this.chatClient = ChatClient.create(chatModel);
-        log.info("AIChatClient: OpenAI mode active");
+        log.info("AIChatClient: live LLM mode active — model bean is {}",
+            chatModel.getClass().getSimpleName());
     }
 
     @Override

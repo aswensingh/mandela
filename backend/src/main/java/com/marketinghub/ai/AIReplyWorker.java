@@ -23,7 +23,6 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -59,6 +58,8 @@ public class AIReplyWorker {
     private final String defaultSystemPrompt;
     private final int ragTopK;
     private final double ragSimilarityThreshold;
+    private final String botPrefix;
+    private final String handoffMessage;
 
     public AIReplyWorker(
         AIChatClient chatClient,
@@ -74,7 +75,9 @@ public class AIReplyWorker {
         @Value("${ai.default-handoff-confidence:0.5}") double defaultHandoffConfidence,
         @Value("${ai.default-system-prompt:You are a helpful assistant.}") String defaultSystemPrompt,
         @Value("${ai.rag.top-k:4}") int ragTopK,
-        @Value("${ai.rag.similarity-threshold:0.0}") double ragSimilarityThreshold
+        @Value("${ai.rag.similarity-threshold:0.0}") double ragSimilarityThreshold,
+        @Value("${messaging.sender-label.bot-prefix:}") String botPrefix,
+        @Value("${ai.handoff-message:}") String handoffMessage
     ) {
         this.chatClient = chatClient;
         this.tenantRepository = tenantRepository;
@@ -90,6 +93,8 @@ public class AIReplyWorker {
         this.defaultSystemPrompt = defaultSystemPrompt;
         this.ragTopK = ragTopK;
         this.ragSimilarityThreshold = ragSimilarityThreshold;
+        this.botPrefix = botPrefix == null ? "" : botPrefix;
+        this.handoffMessage = handoffMessage == null ? "" : handoffMessage;
     }
 
     @RabbitListener(queues = AIAmqpConfig.AI_REPLY_QUEUE)
@@ -133,46 +138,70 @@ public class AIReplyWorker {
         BotReply reply = chatClient.generateReply(req);
         double threshold = handoffThreshold(snap.tenant);
 
+        // Resolve WhatsApp creds once — used for a normal reply AND for the handoff notice.
+        // Missing config must NOT block the handoff itself; it only means we can't deliver
+        // the notice/reply (canSend=false), so the status flip still happens below.
+        boolean mock = apiClient.isMockMode();
+        boolean hasCreds = snap.tenant.getWhatsappPhoneNumberId() != null
+            && snap.tenant.getWhatsappAccessTokenEncrypted() != null;
+        boolean canSend = mock || hasCreds;
+        String phoneNumberId = null;
+        String accessToken = null;
+        if (!mock && hasCreds) {
+            phoneNumberId = snap.tenant.getWhatsappPhoneNumberId();
+            accessToken = encryptionService.decrypt(snap.tenant.getWhatsappAccessTokenEncrypted());
+        }
+        String toPhone = snap.customer == null ? null : snap.customer.getPhoneE164();
+
         if (reply.requestHandoff() || reply.confidence() < threshold) {
             log.info("AI reply: conversation {} -> HUMAN_ACTIVE (handoff={}, confidence={})",
                 envelope.conversationId(), reply.requestHandoff(), reply.confidence());
+            String reason = reply.requestHandoff() ? "MODEL_REQUESTED" : "LOW_CONFIDENCE";
+
+            // Tell the customer a human is taking over so the chat doesn't go silent.
+            // Best-effort — if the notice fails to send, we still hand off.
+            if (canSend && !handoffMessage.isBlank() && toPhone != null) {
+                try {
+                    String noticeWamid = apiClient.sendText(
+                        phoneNumberId, accessToken, toPhone, botPrefix + handoffMessage);
+                    tx.executeWithoutResult(s -> recordSentBot(envelope, handoffMessage, null, noticeWamid));
+                } catch (WhatsAppApiException e) {
+                    log.warn("AI reply: handoff notice failed for conversation {}: {}",
+                        envelope.conversationId(), e.getMessage());
+                }
+            }
+
             tx.executeWithoutResult(s -> {
                 conversationRepository.findById(envelope.conversationId()).ifPresent(c -> {
                     if (c.getStatus() == ConversationStatus.BOT_ACTIVE) {
                         c.setStatus(ConversationStatus.HUMAN_ACTIVE);
+                        // Record why + the confidence so the UI can explain the auto-handoff.
+                        c.setHandoffReason(reason);
+                        c.setHandoffConfidence(reply.confidence());
                     }
                 });
             });
             return;
         }
 
-        // Send via WhatsApp (mock or real).
-        String phoneNumberId = null;
-        String accessToken = null;
-        if (!apiClient.isMockMode()) {
-            if (snap.tenant.getWhatsappPhoneNumberId() == null
-                || snap.tenant.getWhatsappAccessTokenEncrypted() == null) {
-                log.warn("AI reply for tenant {} cannot send: WhatsApp not configured", envelope.tenantId());
-                return;
-            }
-            phoneNumberId = snap.tenant.getWhatsappPhoneNumberId();
-            accessToken = encryptionService.decrypt(snap.tenant.getWhatsappAccessTokenEncrypted());
+        if (!canSend) {
+            log.warn("AI reply for tenant {} cannot send: WhatsApp not configured", envelope.tenantId());
+            return;
         }
-
         String wamid;
         try {
-            wamid = apiClient.sendText(
-                phoneNumberId, accessToken,
-                snap.customer == null ? null : snap.customer.getPhoneE164(),
-                reply.reply());
+            // Prefix the customer-facing text with a bot label so they can tell it's the
+            // automated assistant. We store the clean body (see recordSentBot) — the in-app
+            // thread already shows a BOT tag, so only the WhatsApp copy gets the marker.
+            wamid = apiClient.sendText(phoneNumberId, accessToken, toPhone, botPrefix + reply.reply());
         } catch (WhatsAppApiException e) {
             log.warn("AI reply: WhatsApp send failed for conversation {}: {}",
                 envelope.conversationId(), e.getMessage());
-            tx.executeWithoutResult(s -> recordFailedBot(envelope, reply.reply(), e.getMessage()));
+            tx.executeWithoutResult(s -> recordFailedBot(envelope, reply.reply(), reply.confidence(), e.getMessage()));
             return;
         }
 
-        tx.executeWithoutResult(s -> recordSentBot(envelope, reply, wamid));
+        tx.executeWithoutResult(s -> recordSentBot(envelope, reply.reply(), reply.confidence(), wamid));
         log.info("AI reply: conversation {} -> BOT replied (confidence={}, wamid={})",
             envelope.conversationId(), reply.confidence(), wamid);
     }
@@ -189,11 +218,19 @@ public class AIReplyWorker {
 
         Customer customer = customerRepository.findById(envelope.customerId()).orElse(null);
 
-        var page = messageRepository.findAllByTenantIdAndCustomerIdOrderByCreatedAtAsc(
-            envelope.tenantId(), envelope.customerId(),
-            PageRequest.of(0, historyWindow, Sort.by(Sort.Order.desc("createdAt"))));
+        // Reset-aware history: if an admin clicked "Reset bot context", only feed messages
+        // created strictly after that timestamp into the LLM. UI history is untouched.
+        Instant historyAfter = conversation.getBotContextResetAt() != null
+            ? conversation.getBotContextResetAt()
+            : Instant.EPOCH;
+        // Fetch the LATEST N (newest-first), then reverse to chronological order so the
+        // conversation ends with the customer's most recent message — critical for the LLM,
+        // which treats the final message as the turn it must answer.
+        var page = messageRepository
+            .findAllByTenantIdAndCustomerIdAndCreatedAtAfterOrderByCreatedAtDesc(
+                envelope.tenantId(), envelope.customerId(), historyAfter,
+                PageRequest.of(0, historyWindow));
         List<Message> latest = new ArrayList<>(page.getContent());
-        // The page comes back newest-first when we sort desc; reverse to chronological.
         java.util.Collections.reverse(latest);
 
         List<AIChatRequest.HistoryMessage> history = new ArrayList<>(latest.size());
@@ -261,15 +298,16 @@ public class AIReplyWorker {
         return defaultHandoffConfidence;
     }
 
-    private void recordSentBot(AIReplyMessage envelope, BotReply reply, String wamid) {
+    private void recordSentBot(AIReplyMessage envelope, String body, Double confidence, String wamid) {
         Message m = new Message();
         m.setTenantId(envelope.tenantId());
         m.setCustomerId(envelope.customerId());
         m.setDirection(MessageDirection.OUT);
         m.setSenderType(SenderType.BOT);
-        m.setBody(reply.reply());
+        m.setBody(body);
         m.setStatus(MessageStatus.SENT);
         m.setWhatsappMessageId(wamid);
+        m.setAiConfidence(confidence);
         messageRepository.save(m);
 
         conversationRepository.findById(envelope.conversationId()).ifPresent(c -> {
@@ -277,7 +315,7 @@ public class AIReplyWorker {
         });
     }
 
-    private void recordFailedBot(AIReplyMessage envelope, String body, String error) {
+    private void recordFailedBot(AIReplyMessage envelope, String body, double confidence, String error) {
         Message m = new Message();
         m.setTenantId(envelope.tenantId());
         m.setCustomerId(envelope.customerId());
@@ -286,6 +324,7 @@ public class AIReplyWorker {
         m.setBody(body);
         m.setStatus(MessageStatus.FAILED);
         m.setErrorMessage(truncate(error, 1000));
+        m.setAiConfidence(confidence);
         messageRepository.save(m);
     }
 

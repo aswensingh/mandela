@@ -1,5 +1,7 @@
 package com.marketinghub.customer;
 
+import com.marketinghub.customer.dto.BulkDeleteCustomersRequest;
+import com.marketinghub.customer.dto.BulkDeleteCustomersResponse;
 import com.marketinghub.customer.dto.CreateCustomerRequest;
 import com.marketinghub.customer.dto.CustomerDto;
 import com.marketinghub.customer.dto.UpdateCustomerRequest;
@@ -61,5 +63,11 @@ public class CustomerController {
     @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable UUID id) {
         customerService.delete(id);
+    }
+
+    @PostMapping("/bulk-delete")
+    public BulkDeleteCustomersResponse bulkDelete(@Valid @RequestBody BulkDeleteCustomersRequest request) {
+        int deleted = customerService.bulkDelete(request.ids());
+        return new BulkDeleteCustomersResponse(deleted);
     }
 }

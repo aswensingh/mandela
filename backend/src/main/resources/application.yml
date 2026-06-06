@@ -10,8 +10,8 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
-    properties:
-      hibernate.dialect: org.hibernate.dialect.PostgreSQLDialect
+    # Dialect is auto-detected from the connection (setting it explicitly logs a deprecation warning).
+    open-in-view: false
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -30,6 +30,14 @@ spring:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:localhost}
       port: ${SPRING_DATA_REDIS_PORT:6379}
+      # We use Redis only for rate limiting, not Spring Data repositories. Disabling the
+      # repository scan silences the "Could not safely identify store assignment" warnings.
+      repositories:
+        enabled: false
+    web:
+      pageable:
+        # Default cap is 2000 — raise it so the UI can request up to 10k customers/page.
+        max-page-size: 10000
   ai:
     openai:
       # The placeholder lets Spring AI auto-config build its ChatModel bean even when no
@@ -72,13 +80,15 @@ security:
 platform-admin:
   username: ${PLATFORM_ADMIN_USERNAME:}
   password: ${PLATFORM_ADMIN_PASSWORD:}
-demo-seed:
-  enabled: ${DEMO_SEED_ENABLED:false}
 app:
   encryption:
     master-key: ${ENCRYPTION_MASTER_KEY}
 whatsapp:
   mock: ${WHATSAPP_MOCK:false}
+  # Debugging aids (Send Test Message + Simulate Inbound) — hidden by default. The frontend
+  # hides the cards and the backend refuses the endpoints unless this is true.
+  test-tools:
+    enabled: ${WHATSAPP_TEST_TOOLS_ENABLED:false}
   api:
     base-url: https://graph.facebook.com/v21.0
   webhook:
@@ -100,6 +110,20 @@ ai:
     WhatsApp messages on behalf of its clients. Reply briefly and politely. If the
     customer asks for a human, says they want to talk to an agent, or expresses
     strong frustration, set request_handoff to true. Otherwise, answer the question.
+  # Sent to the customer just before the bot hands a conversation to a human, so the chat
+  # doesn't go silent. Blank disables it (the bot would then hand off without any notice).
+  handoff-message: "Thanks for your message — let me connect you with a member of our team who'll assist you shortly."
+messaging:
+  # Prefix prepended to OUTBOUND WhatsApp text so the customer can tell who is replying.
+  # Applied only to what we send to WhatsApp — the stored message body stays clean (the
+  # in-app thread already shows a Bot/Agent/System tag). The bot prefix spells out that
+  # it's automated; the agent prefix is followed by the agent's real name, e.g.
+  # "👤 Jane (Bright Smile team): ...", so a human reads as a human. Empty = disabled.
+  sender-label:
+    bot-prefix: "🤖 AI Assistant: "
+    agent-prefix: "👤 "
+    # Appended after the agent's name (before the message) on human replies. Blank to omit.
+    agent-suffix: " (Bright Smile team)"
 blast:
   rate-limit:
     # capacity=1 enforces strict pacing (every send waits 1/refill seconds).

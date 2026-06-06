@@ -1,5 +1,6 @@
 package com.marketinghub.tenant;
 
+import com.marketinghub.common.TestToolsGuard;
 import com.marketinghub.tenant.dto.SimulateInboundRequest;
 import com.marketinghub.tenant.dto.SimulateInboundResponse;
 import com.marketinghub.tenant.dto.UpdateWhatsAppConfigRequest;
@@ -20,9 +21,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class WhatsAppConfigController {
 
     private final WhatsAppConfigService service;
+    private final TestToolsGuard testToolsGuard;
 
-    public WhatsAppConfigController(WhatsAppConfigService service) {
+    public WhatsAppConfigController(WhatsAppConfigService service, TestToolsGuard testToolsGuard) {
         this.service = service;
+        this.testToolsGuard = testToolsGuard;
     }
 
     @GetMapping
@@ -56,6 +59,7 @@ public class WhatsAppConfigController {
     public SimulateInboundResponse simulateInbound(
         @Valid @RequestBody SimulateInboundRequest request
     ) {
+        testToolsGuard.requireEnabled();
         return service.simulateInbound(request);
     }
 }

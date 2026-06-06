@@ -30,6 +30,7 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -86,7 +87,9 @@ class AIReplyWorkerTest {
             0.5,
             "default system prompt",
             4,
-            0.0
+            0.0,
+            "",
+            ""
         );
         // VectorStore returns no chunks by default; tests that exercise RAG opt-in.
         // Lenient because not every test triggers retrieval (e.g., not-BOT_ACTIVE short-circuit).
@@ -99,8 +102,8 @@ class AIReplyWorkerTest {
         when(conversationRepository.findById(CONVO_ID)).thenReturn(Optional.of(convo));
         when(tenantRepository.findById(TENANT_ID)).thenReturn(Optional.of(stubTenant(null, null)));
         when(customerRepository.findById(CUSTOMER_ID)).thenReturn(Optional.of(stubCustomer()));
-        when(messageRepository.findAllByTenantIdAndCustomerIdOrderByCreatedAtAsc(
-            eq(TENANT_ID), eq(CUSTOMER_ID), any(Pageable.class)))
+        when(messageRepository.findAllByTenantIdAndCustomerIdAndCreatedAtAfterOrderByCreatedAtDesc(
+            eq(TENANT_ID), eq(CUSTOMER_ID), any(Instant.class), any(Pageable.class)))
             .thenReturn(stubHistory("Hello there"));
         when(chatClient.generateReply(any(AIChatRequest.class)))
             .thenReturn(new BotReply("Hi! How can I help?", 0.9, false));
@@ -134,8 +137,8 @@ class AIReplyWorkerTest {
         when(conversationRepository.findById(CONVO_ID)).thenReturn(Optional.of(convo));
         when(tenantRepository.findById(TENANT_ID)).thenReturn(Optional.of(stubTenant(null, null)));
         when(customerRepository.findById(CUSTOMER_ID)).thenReturn(Optional.of(stubCustomer()));
-        when(messageRepository.findAllByTenantIdAndCustomerIdOrderByCreatedAtAsc(
-            eq(TENANT_ID), eq(CUSTOMER_ID), any(Pageable.class)))
+        when(messageRepository.findAllByTenantIdAndCustomerIdAndCreatedAtAfterOrderByCreatedAtDesc(
+            eq(TENANT_ID), eq(CUSTOMER_ID), any(Instant.class), any(Pageable.class)))
             .thenReturn(stubHistory("I want to talk to a human"));
         when(chatClient.generateReply(any(AIChatRequest.class)))
             .thenReturn(new BotReply("Connecting you to a human.", 0.95, true));
@@ -148,6 +151,44 @@ class AIReplyWorkerTest {
     }
 
     @Test
+    void handoffWithNotice_sendsAcknowledgement_thenFlipsHumanActive() {
+        // A worker configured with a handoff message should warn the customer before handing off.
+        AIReplyWorker workerWithNotice = new AIReplyWorker(
+            chatClient, tenantRepository, conversationRepository, customerRepository,
+            messageRepository, encryptionService, apiClient, vectorStore, noopTm,
+            10, 0.5, "default system prompt", 4, 0.0, "", "A teammate will assist you shortly.");
+
+        Conversation convo = botConvo();
+        when(conversationRepository.findById(CONVO_ID)).thenReturn(Optional.of(convo));
+        when(tenantRepository.findById(TENANT_ID)).thenReturn(Optional.of(stubTenant(null, null)));
+        when(customerRepository.findById(CUSTOMER_ID)).thenReturn(Optional.of(stubCustomer()));
+        when(messageRepository.findAllByTenantIdAndCustomerIdAndCreatedAtAfterOrderByCreatedAtDesc(
+            eq(TENANT_ID), eq(CUSTOMER_ID), any(Instant.class), any(Pageable.class)))
+            .thenReturn(stubHistory("I have a toothache"));
+        when(chatClient.generateReply(any(AIChatRequest.class)))
+            .thenReturn(new BotReply("(discarded)", 0.9, true));
+        when(apiClient.isMockMode()).thenReturn(true);
+        when(apiClient.sendText(any(), any(), anyString(), anyString())).thenReturn("wamid.NOTICE");
+
+        AtomicReference<Message> saved = new AtomicReference<>();
+        when(messageRepository.save(any(Message.class))).thenAnswer(inv -> {
+            Message m = inv.getArgument(0);
+            saved.set(m);
+            return m;
+        });
+
+        workerWithNotice.onMessage(new AIReplyMessage(TENANT_ID, CONVO_ID, CUSTOMER_ID));
+
+        // Customer got the acknowledgement (sent to WhatsApp + persisted as a BOT message)...
+        verify(apiClient).sendText(any(), any(), anyString(), eq("A teammate will assist you shortly."));
+        assertThat(saved.get()).isNotNull();
+        assertThat(saved.get().getSenderType()).isEqualTo(SenderType.BOT);
+        assertThat(saved.get().getBody()).isEqualTo("A teammate will assist you shortly.");
+        // ...and the conversation still flips to HUMAN_ACTIVE.
+        assertThat(convo.getStatus()).isEqualTo(ConversationStatus.HUMAN_ACTIVE);
+    }
+
+    @Test
     void lowConfidence_belowTenantThreshold_alsoFlipsToHumanActive() {
         // Custom threshold = 0.8; bot returns 0.6 → handoff even though request_handoff=false.
         Conversation convo = botConvo();
@@ -156,8 +197,8 @@ class AIReplyWorkerTest {
         cfg.put("handoff_confidence_threshold", 0.8);
         when(tenantRepository.findById(TENANT_ID)).thenReturn(Optional.of(stubTenant(null, cfg)));
         when(customerRepository.findById(CUSTOMER_ID)).thenReturn(Optional.of(stubCustomer()));
-        when(messageRepository.findAllByTenantIdAndCustomerIdOrderByCreatedAtAsc(
-            eq(TENANT_ID), eq(CUSTOMER_ID), any(Pageable.class)))
+        when(messageRepository.findAllByTenantIdAndCustomerIdAndCreatedAtAfterOrderByCreatedAtDesc(
+            eq(TENANT_ID), eq(CUSTOMER_ID), any(Instant.class), any(Pageable.class)))
             .thenReturn(stubHistory("ambiguous question"));
         when(chatClient.generateReply(any(AIChatRequest.class)))
             .thenReturn(new BotReply("I think it's…", 0.6, false));
@@ -175,8 +216,8 @@ class AIReplyWorkerTest {
         when(conversationRepository.findById(CONVO_ID)).thenReturn(Optional.of(convo));
         when(tenantRepository.findById(TENANT_ID)).thenReturn(Optional.of(stubTenant(null, null)));
         when(customerRepository.findById(CUSTOMER_ID)).thenReturn(Optional.of(stubCustomer()));
-        when(messageRepository.findAllByTenantIdAndCustomerIdOrderByCreatedAtAsc(
-            eq(TENANT_ID), eq(CUSTOMER_ID), any(Pageable.class)))
+        when(messageRepository.findAllByTenantIdAndCustomerIdAndCreatedAtAfterOrderByCreatedAtDesc(
+            eq(TENANT_ID), eq(CUSTOMER_ID), any(Instant.class), any(Pageable.class)))
             .thenReturn(stubHistory("ignored"));
 
         worker.onMessage(new AIReplyMessage(TENANT_ID, CONVO_ID, CUSTOMER_ID));
@@ -194,8 +235,8 @@ class AIReplyWorkerTest {
         when(tenantRepository.findById(TENANT_ID))
             .thenReturn(Optional.of(stubTenant("you are a dental concierge", null)));
         when(customerRepository.findById(CUSTOMER_ID)).thenReturn(Optional.of(stubCustomer()));
-        when(messageRepository.findAllByTenantIdAndCustomerIdOrderByCreatedAtAsc(
-            eq(TENANT_ID), eq(CUSTOMER_ID), any(Pageable.class)))
+        when(messageRepository.findAllByTenantIdAndCustomerIdAndCreatedAtAfterOrderByCreatedAtDesc(
+            eq(TENANT_ID), eq(CUSTOMER_ID), any(Instant.class), any(Pageable.class)))
             .thenReturn(stubHistory("question"));
         when(apiClient.isMockMode()).thenReturn(true);
         when(apiClient.sendText(any(), any(), anyString(), anyString()))
@@ -219,8 +260,8 @@ class AIReplyWorkerTest {
         when(conversationRepository.findById(CONVO_ID)).thenReturn(Optional.of(convo));
         when(tenantRepository.findById(TENANT_ID)).thenReturn(Optional.of(stubTenant(null, null)));
         when(customerRepository.findById(CUSTOMER_ID)).thenReturn(Optional.of(stubCustomer()));
-        when(messageRepository.findAllByTenantIdAndCustomerIdOrderByCreatedAtAsc(
-            eq(TENANT_ID), eq(CUSTOMER_ID), any(Pageable.class)))
+        when(messageRepository.findAllByTenantIdAndCustomerIdAndCreatedAtAfterOrderByCreatedAtDesc(
+            eq(TENANT_ID), eq(CUSTOMER_ID), any(Instant.class), any(Pageable.class)))
             .thenReturn(stubHistory("how much for whitening?"));
 
         Map<String, Object> md = new HashMap<>();

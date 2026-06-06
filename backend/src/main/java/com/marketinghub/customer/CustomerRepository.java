@@ -3,6 +3,7 @@ package com.marketinghub.customer;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -22,6 +23,15 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID> {
     long countByIdInAndTenantId(Collection<UUID> ids, UUID tenantId);
 
     List<Customer> findAllByIdInAndTenantId(Collection<UUID> ids, UUID tenantId);
+
+    /**
+     * Bulk delete scoped to a tenant in a single SQL statement (no per-row entity load).
+     * Returns the number of rows actually deleted — ids belonging to other tenants are
+     * filtered out by the tenant_id predicate, so cross-tenant ids are silently ignored.
+     */
+    @Modifying
+    @Query("DELETE FROM Customer c WHERE c.tenantId = :tenantId AND c.id IN :ids")
+    int deleteByTenantIdAndIdIn(@Param("tenantId") UUID tenantId, @Param("ids") Collection<UUID> ids);
 
     /**
      * Tenant-scoped search with optional filters.

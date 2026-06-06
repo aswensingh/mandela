@@ -4,6 +4,7 @@ export type WhatsAppConfigStatus = {
   configured: boolean;
   phoneNumberId: string | null;
   tokenLastFour: string | null;
+  testToolsEnabled: boolean;
 };
 
 export type UpdateWhatsAppConfigRequest = {

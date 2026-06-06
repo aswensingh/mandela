@@ -1,5 +1,6 @@
 package com.marketinghub.whatsapp;
 
+import com.marketinghub.common.TestToolsGuard;
 import com.marketinghub.message.dto.MessageDto;
 import com.marketinghub.whatsapp.dto.SendTestRequest;
 import jakarta.validation.Valid;
@@ -17,13 +18,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class WhatsAppController {
 
     private final WhatsAppMessageService service;
+    private final TestToolsGuard testToolsGuard;
 
-    public WhatsAppController(WhatsAppMessageService service) {
+    public WhatsAppController(WhatsAppMessageService service, TestToolsGuard testToolsGuard) {
         this.service = service;
+        this.testToolsGuard = testToolsGuard;
     }
 
     @PostMapping("/send-test")
     public ResponseEntity<MessageDto> sendTest(@Valid @RequestBody SendTestRequest request) {
+        testToolsGuard.requireEnabled();
         MessageDto dto = service.sendTest(request);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(dto);
     }

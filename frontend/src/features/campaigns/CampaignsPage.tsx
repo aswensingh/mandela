@@ -340,7 +340,7 @@ export default function CampaignsPage() {
             <Select<string>
               placeholder={isLoadingCustomers ? 'Loading...' : 'Pick a Meta-approved template'}
               options={(templatesPage?.content ?? []).map((t: Template) => ({
-                label: `${t.name} (${t.whatsappTemplateName}:${t.language})`,
+                label: t.name,
                 value: t.id,
               }))}
             />
@@ -385,6 +385,22 @@ export default function CampaignsPage() {
   );
 }
 
+function recipientStatusColor(s: string): string {
+  switch (s) {
+    case 'SENT':
+      return 'blue';
+    case 'DELIVERED':
+      return 'cyan';
+    case 'READ':
+      return 'green';
+    case 'FAILED':
+      return 'red';
+    case 'PENDING':
+    default:
+      return 'default';
+  }
+}
+
 function RecipientsPanel({ campaignId }: { campaignId: string }) {
   // Server-side pagination: lift page + pageSize into state so the user's choice
   // in the AntD page-size dropdown actually reaches the backend. Previously this
@@ -405,7 +421,29 @@ function RecipientsPanel({ campaignId }: { campaignId: string }) {
       key: 'customerName',
       render: (v: string | null) => v ?? '—',
     },
-    { title: 'Status', dataIndex: 'status', key: 'status' },
+    {
+      title: 'Status',
+      dataIndex: 'status',
+      key: 'status',
+      render: (s: string) => (
+        <Tag color={recipientStatusColor(s)} style={{ marginRight: 0 }}>
+          {s}
+        </Tag>
+      ),
+    },
+    {
+      title: 'Detail',
+      dataIndex: 'errorMessage',
+      key: 'errorMessage',
+      render: (v: string | null) =>
+        v ? (
+          <Typography.Text type="danger" style={{ fontSize: 12 }} title={v}>
+            {v.length > 70 ? `${v.slice(0, 70)}…` : v}
+          </Typography.Text>
+        ) : (
+          '—'
+        ),
+    },
     {
       title: 'Sent at',
       dataIndex: 'sentAt',

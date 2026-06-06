@@ -50,6 +50,11 @@ public class Message {
     @Column(name = "error_message")
     private String errorMessage;
 
+    // Dev/debug: AI bot's self-reported confidence (0..1) for this reply. Null for
+    // non-bot messages.
+    @Column(name = "ai_confidence")
+    private Double aiConfidence;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -84,6 +89,9 @@ public class Message {
 
     public String getErrorMessage() { return errorMessage; }
     public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
+
+    public Double getAiConfidence() { return aiConfidence; }
+    public void setAiConfidence(Double aiConfidence) { this.aiConfidence = aiConfidence; }
 
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

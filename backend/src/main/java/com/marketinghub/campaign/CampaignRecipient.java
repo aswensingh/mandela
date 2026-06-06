@@ -36,6 +36,9 @@ public class CampaignRecipient {
     @Column(name = "error_message")
     private String errorMessage;
 
+    @Column(name = "whatsapp_message_id")
+    private String whatsappMessageId;
+
     @Column(name = "sent_at")
     private Instant sentAt;
 
@@ -61,6 +64,9 @@ public class CampaignRecipient {
 
     public String getErrorMessage() { return errorMessage; }
     public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
+
+    public String getWhatsappMessageId() { return whatsappMessageId; }
+    public void setWhatsappMessageId(String whatsappMessageId) { this.whatsappMessageId = whatsappMessageId; }
 
     public Instant getSentAt() { return sentAt; }
     public void setSentAt(Instant sentAt) { this.sentAt = sentAt; }

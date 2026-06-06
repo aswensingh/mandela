@@ -1,6 +1,7 @@
 package com.marketinghub.conversation;
 
 import com.marketinghub.auth.AuthenticatedPrincipal;
+import com.marketinghub.auth.UserRepository;
 import com.marketinghub.common.crypto.EncryptionService;
 import com.marketinghub.conversation.dto.ConversationListItemDto;
 import com.marketinghub.conversation.dto.ConversationMessageDto;
@@ -17,6 +18,7 @@ import com.marketinghub.tenant.TenantRepository;
 import com.marketinghub.whatsapp.WhatsAppApiClient;
 import com.marketinghub.whatsapp.WhatsAppApiException;
 import com.marketinghub.whatsapp.WhatsAppNotConfiguredException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -50,6 +52,9 @@ public class ConversationService {
     private final TenantRepository tenantRepository;
     private final EncryptionService encryptionService;
     private final WhatsAppApiClient whatsAppApiClient;
+    private final UserRepository userRepository;
+    private final String agentPrefix;
+    private final String agentSuffix;
 
     public ConversationService(
         ConversationRepository conversationRepository,
@@ -57,7 +62,10 @@ public class ConversationService {
         MessageRepository messageRepository,
         TenantRepository tenantRepository,
         EncryptionService encryptionService,
-        WhatsAppApiClient whatsAppApiClient
+        WhatsAppApiClient whatsAppApiClient,
+        UserRepository userRepository,
+        @Value("${messaging.sender-label.agent-prefix:}") String agentPrefix,
+        @Value("${messaging.sender-label.agent-suffix:}") String agentSuffix
     ) {
         this.conversationRepository = conversationRepository;
         this.customerRepository = customerRepository;
@@ -65,6 +73,9 @@ public class ConversationService {
         this.tenantRepository = tenantRepository;
         this.encryptionService = encryptionService;
         this.whatsAppApiClient = whatsAppApiClient;
+        this.userRepository = userRepository;
+        this.agentPrefix = agentPrefix == null ? "" : agentPrefix;
+        this.agentSuffix = agentSuffix == null ? "" : agentSuffix;
     }
 
     @Transactional(readOnly = true)
@@ -95,6 +106,21 @@ public class ConversationService {
 
         return page.map(c -> toListItem(
             c, customersById.get(c.getCustomerId()), latestByCustomer.get(c.getCustomerId())));
+    }
+
+    /**
+     * Deletes a customer's entire conversation: all messages plus the conversation row.
+     * The customer record itself is kept (so you can re-test with the same number). Handy
+     * for clearing a chat to a clean slate. Unlike "reset bot context" — which keeps the
+     * messages and only hides them from the LLM — this permanently removes the thread.
+     */
+    @Transactional
+    public void deleteConversation(UUID id) {
+        UUID tenantId = requireTenant();
+        Conversation c = conversationRepository.findByIdAndTenantId(id, tenantId)
+            .orElseThrow(() -> new ConversationNotFoundException(id));
+        messageRepository.deleteByTenantIdAndCustomerId(tenantId, c.getCustomerId());
+        conversationRepository.delete(c);
     }
 
     @Transactional(readOnly = true)
@@ -135,6 +161,8 @@ public class ConversationService {
         }
         c.setStatus(ConversationStatus.HUMAN_ACTIVE);
         c.setAssignedAgentId(currentUserId());
+        c.setHandoffReason("MANUAL_TAKEOVER");
+        c.setHandoffConfidence(null);
         conversationRepository.save(c);
         return reloadAsListItem(c, tenantId);
     }
@@ -154,6 +182,28 @@ public class ConversationService {
         }
         c.setStatus(ConversationStatus.BOT_ACTIVE);
         c.setAssignedAgentId(null);
+        c.setHandoffReason(null);
+        c.setHandoffConfidence(null);
+        conversationRepository.save(c);
+        return reloadAsListItem(c, tenantId);
+    }
+
+    /**
+     * Wipes the bot's running context for this conversation. We set bot_context_reset_at
+     * to "now" — the AIReplyWorker only feeds messages with created_at > that timestamp
+     * into the LLM, so the bot effectively starts fresh on the next inbound. The visible
+     * UI history is intentionally untouched.
+     */
+    @Transactional
+    public ConversationListItemDto resetBotContext(UUID id) {
+        UUID tenantId = requireTenant();
+        Conversation c = conversationRepository.findByIdAndTenantId(id, tenantId)
+            .orElseThrow(() -> new ConversationNotFoundException(id));
+        if (c.getStatus() == ConversationStatus.CLOSED) {
+            throw new InvalidConversationStateException(
+                "Cannot reset bot context on a CLOSED conversation");
+        }
+        c.setBotContextResetAt(Instant.now());
         conversationRepository.save(c);
         return reloadAsListItem(c, tenantId);
     }
@@ -203,8 +253,12 @@ public class ConversationService {
         m.setBody(body);
 
         try {
+            // Label the customer-facing text with the agent's name so they know a human
+            // (not the bot) is now replying. The stored body stays clean — the in-app
+            // thread already shows an AGENT tag.
+            String outbound = agentLabel() + body;
             String wamid = whatsAppApiClient.sendText(
-                phoneNumberId, accessToken, customer.getPhoneE164(), body);
+                phoneNumberId, accessToken, customer.getPhoneE164(), outbound);
             m.setStatus(MessageStatus.SENT);
             m.setWhatsappMessageId(wamid);
         } catch (WhatsAppApiException e) {
@@ -246,7 +300,9 @@ public class ConversationService {
             latest == null ? null : truncate(latest.getBody(), PREVIEW_MAX),
             latest == null ? null : latest.getDirection(),
             latest == null ? null : latest.getSenderType(),
-            c.getCreatedAt()
+            c.getCreatedAt(),
+            c.getHandoffReason(),
+            c.getHandoffConfidence()
         );
     }
 
@@ -259,6 +315,7 @@ public class ConversationService {
             m.getStatus(),
             m.getWhatsappMessageId(),
             m.getErrorMessage(),
+            m.getAiConfidence(),
             m.getCreatedAt()
         );
     }
@@ -302,5 +359,20 @@ public class ConversationService {
             throw new AccessDeniedException("Not authenticated");
         }
         return principal.userId();
+    }
+
+    /**
+     * Builds the customer-facing prefix for an agent message, e.g. "👤 Jane: ".
+     * Returns "" when labelling is disabled (blank agent-prefix config). Prefers the
+     * agent's full name, falling back to username, then a generic "Agent".
+     */
+    private String agentLabel() {
+        if (agentPrefix.isBlank()) return "";
+        String name = userRepository.findById(currentUserId())
+            .map(u -> (u.getFullName() != null && !u.getFullName().isBlank())
+                ? u.getFullName().trim()
+                : u.getUsername())
+            .orElse("Agent");
+        return agentPrefix + name + agentSuffix + ": ";
     }
 }

@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
@@ -95,6 +96,18 @@ public class CustomerService {
         Customer c = customerRepository.findByIdAndTenantId(id, tenantId)
             .orElseThrow(() -> new CustomerNotFoundException(id));
         customerRepository.delete(c);
+    }
+
+    /**
+     * Deletes many customers in a single SQL statement. Silently skips ids that don't
+     * belong to the current tenant (we don't want to leak which ids exist in other
+     * tenants), and returns the count actually removed.
+     */
+    @Transactional
+    public int bulkDelete(Collection<UUID> ids) {
+        UUID tenantId = requireTenant();
+        if (ids == null || ids.isEmpty()) return 0;
+        return customerRepository.deleteByTenantIdAndIdIn(tenantId, ids);
     }
 
     private UUID requireTenant() {

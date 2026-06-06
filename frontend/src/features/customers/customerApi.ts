@@ -90,6 +90,17 @@ export const customerApi = baseApi.injectEndpoints({
         { type: 'Customer', id: 'LIST' },
       ],
     }),
+    bulkDeleteCustomers: builder.mutation<{ deleted: number }, string[]>({
+      query: (ids) => ({
+        url: '/customers/bulk-delete',
+        method: 'POST',
+        body: { ids },
+      }),
+      invalidatesTags: (_res, _err, ids) => [
+        ...ids.map((id) => ({ type: 'Customer' as const, id })),
+        { type: 'Customer' as const, id: 'LIST' },
+      ],
+    }),
   }),
   overrideExisting: false,
 });
@@ -99,4 +110,5 @@ export const {
   useCreateCustomerMutation,
   useUpdateCustomerMutation,
   useDeleteCustomerMutation,
+  useBulkDeleteCustomersMutation,
 } = customerApi;

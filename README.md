@@ -25,13 +25,14 @@ Everything runs in Docker — you don't need Java, Node, or Maven installed loca
 
 **Prerequisites:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) (with Docker Compose v2). Make sure it's running.
 
-**1. Clone and configure:**
+**1. Clone:**
 
 ```bash
 git clone <this repo>
 cd marketinghub
-cp .env.example .env     # safe local defaults — runs in mock mode, no API keys needed
 ```
+
+The repo ships a ready-to-run `.env` with safe local defaults — runs in mock mode, no API keys needed. (See [Going live](#going-live) to switch to real services.)
 
 **2. Start the whole stack:**
 
@@ -39,7 +40,7 @@ cp .env.example .env     # safe local defaults — runs in mock mode, no API key
 docker compose up -d --build   # postgres, redis, rabbitmq, backend, frontend
 ```
 
-First run takes a couple of minutes (it builds the images and runs DB migrations + seed data). Watch progress with `docker compose logs -f backend`.
+First run takes a couple of minutes (it builds the images and runs DB migrations). Watch progress with `docker compose logs -f backend`.
 
 **3. Open the app:** once the backend is healthy, go to **http://localhost:5173** and log in (see accounts below).
 
@@ -49,30 +50,27 @@ First run takes a couple of minutes (it builds the images and runs DB migrations
 docker compose ps              # container health / ports
 docker compose logs -f backend # follow backend logs
 docker compose down            # stop containers, keep the database
-docker compose down -v         # stop AND wipe the database — next `up` re-seeds from scratch
+docker compose down -v         # stop AND wipe the database
 ```
 
-> **Resetting:** the demo accounts and customers are seeded once, into an empty database. If you change seed logic or want a clean slate, run `docker compose down -v` then `docker compose up -d --build`.
+### Default account
 
-### Default accounts
-
-Login is by **username** (not email). On a fresh database (`DEMO_SEED_ENABLED=true`, the default in `.env.example`) these accounts are created for you:
+Login is by **username** (not email). On a fresh database the platform admin is created from
+`PLATFORM_ADMIN_USERNAME` / `PLATFORM_ADMIN_PASSWORD` in your `.env`:
 
 | Role | Username | Password |
 |---|---|---|
 | Platform Admin | `admin` | `admin` |
-| Acme Tenant Admin | `acme` | `acme12345` |
-| Acme Agent | `agent1` | `agent12345` |
-| Beta Tenant Admin | `beta` | `beta12345` |
 
-The platform admin comes from `PLATFORM_ADMIN_USERNAME` / `PLATFORM_ADMIN_PASSWORD` in your `.env`; the two demo tenants (**Acme**, **Beta**), their accounts, and ~2 000 fake customers each come from the demo seeder (toggle with `DEMO_SEED_ENABLED`). The customers let you immediately try the Customers page, template creation, and campaign launches.
+Sign in as the platform admin to create your first tenant and its Tenant Admin, then manage
+customers, templates, and campaigns from there.
 
 ### Mock mode (default)
 
 Out of the box, the app runs with **mocked WhatsApp + mocked OpenAI** — no external API keys needed. You can:
 
 - Send campaigns (they go to a fake Meta endpoint and complete instantly)
-- Receive simulated inbound messages via the verification scripts in `scripts/`
+- Simulate inbound customer messages from the WhatsApp settings page (enable `WHATSAPP_TEST_TOOLS_ENABLED`)
 - Watch the AI chatbot reply (it's a deterministic echo bot in mock mode)
 
 To switch to real services, see [Going live](#going-live) below.
@@ -174,8 +172,6 @@ npm run dev:stop     # stop ngrok + Docker containers, keeping DB volumes
 
 `npm run dev` is just a convenience wrapper around `scripts\start-dev-tunnel.ps1` (on Windows you can also double-click `scripts\start-dev-tunnel.cmd`): it starts the Docker stack, starts ngrok with the configured static URL, and verifies the public Meta webhook handshake. Make sure Docker Desktop is running first. The webhook callback Meta should point at is `https://<your-ngrok-domain>/api/webhooks/whatsapp`.
 
-Detailed credentials checklist is in `docs/decisions.md` and there's a step-by-step in the Phase 9 doc.
-
 ---
 
 ## Tech stack
@@ -203,7 +199,7 @@ marketinghub/
 ├── CLAUDE.md                       # project rules for AI assistants
 ├── README.md                       # this file
 ├── docker-compose.yml              # 5-service local stack
-├── .env.example                    # template — copy to .env
+├── .env                            # local config — mock-mode defaults (tracked)
 ├── backend/                        # Spring Boot
 │   └── src/main/java/com/marketinghub/
 │       ├── auth/                   # JWT, login, users
@@ -223,58 +219,8 @@ marketinghub/
 │       ├── services/               # baseApi (RTK Query), reauth
 │       ├── features/               # one folder per feature (auth, tenants, ...)
 │       └── shared/                 # AppLayout
-├── docs/
-│   ├── architecture.md
-│   ├── decisions.md
-│   └── phases/                     # development phase docs
-└── scripts/                        # smoke-test scripts you can run against a running stack
+└── scripts/                        # dev workflow + ngrok tunnel helpers
 ```
-
----
-
-## Development phases
-
-The app was built in 18 small phases, each independently verifiable. See `docs/phases/` for the details.
-
-| # | Phase | What works after |
-|---|---|---|
-| 1 | Hello world | Frontend says "Hello", backend returns `/api/health` |
-| 2 | Database | Postgres in compose, Flyway runs, `/api/db-info` works |
-| 3 | Auth | Register, login, JWT, refresh, /me endpoint |
-| 4 | Multi-tenancy | Users belong to tenants, Platform Admin seeded |
-| 5 | Tenant management | Platform Admin creates tenants in UI |
-| 6 | User management | Tenant Admin manages users in their tenant |
-| 7 | Customers | CRUD for customer records |
-| 8 | CSV import | Upload customer list as CSV (async worker) |
-| 9 | WhatsApp config | Save WhatsApp Business credentials per tenant (encrypted) |
-| 10 | WhatsApp send | Send a single message via Meta Cloud API |
-| 11 | Templates | CRUD for message templates |
-| 12 | Campaigns | Define a campaign (template + recipients) |
-| 13 | Blast worker | Launch a campaign, send to all with rate limiting |
-| 14 | Inbound webhooks | Receive customer replies (HMAC-verified) |
-| 15 | Conversations UI | Two-pane chat view |
-| 16 | AI chatbot | Bot replies to incoming messages |
-| 17 | Knowledge base + RAG | Bot uses tenant-specific knowledge docs |
-| 18 | Agent takeover | Agent takes over from bot, sends manual replies |
-
-Post-MVP additions (still going in):
-- Soft + hard tenant deletion with cascade
-- Admin-assisted password reset
-- React 19 upgrade
-
----
-
-## Running the verification scripts
-
-The `scripts/` folder has end-to-end smoke tests that exercise full user journeys against a running stack:
-
-```bash
-bash scripts/phase18-verify.sh         # inbound → bot → take over → agent reply → release
-bash scripts/tenant-delete-verify.sh   # create → soft delete → restore filter → hard purge
-bash scripts/reset-password-verify.sh  # platform admin + tenant admin reset flows
-```
-
-Each script is self-contained, uses the seeded accounts, and prints pass/fail per step.
 
 ---
 
@@ -285,13 +231,7 @@ cd backend
 ./mvnw test
 ```
 
-Currently **126 tests** covering auth, multi-tenancy, customers, CSV import, encryption, WhatsApp send, templates, campaigns, the blast worker, the rate limiter, webhooks, conversations, the AI worker, the knowledge base RAG, tenant deletion, and password reset.
-
----
-
-## Why so many small phases?
-
-A previous attempt with bigger phases failed — agentic coding assistants couldn't scaffold large multi-service phases without something subtly breaking. With 18 small phases, each one is debuggable on its own, and you have a working app after every phase (just with fewer features).
+Currently **132 tests** covering auth, multi-tenancy, customers, CSV import, encryption, WhatsApp send, templates, campaigns, the blast worker, the rate limiter, webhooks, conversations, the AI worker, the knowledge base RAG, tenant deletion, and password reset.
 
 ---
 

@@ -18,6 +18,8 @@ export type ConversationListItem = {
   lastMessageDirection: MessageDirection | null;
   lastMessageSenderType: SenderType | null;
   createdAt: string;
+  handoffReason: string | null;
+  handoffConfidence: number | null;
 };
 
 export type ConversationMessage = {
@@ -28,6 +30,7 @@ export type ConversationMessage = {
   status: MessageStatus;
   whatsappMessageId: string | null;
   errorMessage: string | null;
+  aiConfidence: number | null;
   createdAt: string;
 };
 
@@ -102,6 +105,27 @@ export const conversationApi = baseApi.injectEndpoints({
         { type: 'Conversation', id: 'LIST' },
       ],
     }),
+    resetBotContext: builder.mutation<ConversationListItem, string>({
+      query: (id) => ({
+        url: `/conversations/${id}/reset-bot-context`,
+        method: 'POST',
+      }),
+      invalidatesTags: (_r, _e, id) => [
+        { type: 'Conversation', id },
+        { type: 'Conversation', id: 'LIST' },
+      ],
+    }),
+    deleteConversation: builder.mutation<void, string>({
+      query: (id) => ({
+        url: `/conversations/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: (_r, _e, id) => [
+        { type: 'Conversation', id },
+        { type: 'Conversation', id: `${id}-messages` },
+        { type: 'Conversation', id: 'LIST' },
+      ],
+    }),
     sendAgentMessage: builder.mutation<ConversationMessage, SendMessageArgs>({
       query: ({ id, body }) => ({
         url: `/conversations/${id}/messages`,
@@ -123,5 +147,7 @@ export const {
   useListMessagesQuery,
   useTakeOverConversationMutation,
   useReleaseConversationMutation,
+  useResetBotContextMutation,
+  useDeleteConversationMutation,
   useSendAgentMessageMutation,
 } = conversationApi;

@@ -37,6 +37,12 @@ const STATUS_OPTIONS: TemplateStatus[] = [
   'DISABLED',
 ];
 
+const LANGUAGE_OPTIONS = [
+  { label: 'English', value: 'en' },
+  { label: 'Malay', value: 'ms' },
+  { label: 'Chinese', value: 'zh_CN' },
+];
+
 const STATUS_COLOR: Record<TemplateStatus, string> = {
   APPROVED: 'green',
   PENDING: 'blue',
@@ -152,8 +158,27 @@ export default function TemplatesPage() {
         title: 'Body preview',
         dataIndex: 'bodyPreview',
         key: 'bodyPreview',
-        ellipsis: true,
-        render: (v: string | null) => v ?? '—',
+        width: 340,
+        // Clamp the truncation in the cell's own markup. The column's `ellipsis`/`width`
+        // alone don't work under scroll:max-content (the table auto-sizes to content), but a
+        // fixed-width div with overflow:hidden can't widen the column, so it truncates to "…".
+        // Hover (title) shows the full text.
+        render: (v: string | null) =>
+          v ? (
+            <div
+              title={v}
+              style={{
+                maxWidth: 320,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {v}
+            </div>
+          ) : (
+            '—'
+          ),
       },
       {
         title: 'Created',
@@ -298,15 +323,13 @@ export default function TemplatesPage() {
           <Form.Item
             label="Language"
             name="language"
-            rules={[
-              { required: true, message: 'Required' },
-              {
-                pattern: /^[a-z]{2,3}(_[A-Z]{2})?$/,
-                message: "Use 'en' or 'en_US' style codes",
-              },
-            ]}
+            rules={[{ required: true, message: 'Required' }]}
           >
-            <Input placeholder="en_US" disabled={!!editing} />
+            <Select
+              options={LANGUAGE_OPTIONS}
+              placeholder="Select language"
+              disabled={!!editing}
+            />
           </Form.Item>
           <Form.Item label="Body preview (optional)" name="bodyPreview">
             <Input.TextArea

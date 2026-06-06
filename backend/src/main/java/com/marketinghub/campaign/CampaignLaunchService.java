@@ -91,7 +91,7 @@ public class CampaignLaunchService {
         }
 
         List<CampaignSendMessage> envelopes = new ArrayList<>(recipients.size());
-        String body = template.getBodyPreview() == null ? template.getName() : template.getBodyPreview();
+        String rawBody = template.getBodyPreview() == null ? template.getName() : template.getBodyPreview();
         for (CampaignRecipient r : recipients) {
             Customer c = byId.get(r.getCustomerId());
             if (c == null) {
@@ -100,6 +100,9 @@ public class CampaignLaunchService {
                 r.setErrorMessage("Customer no longer exists");
                 continue;
             }
+            // Personalize per recipient: the rendered text is stored/shown in-app; the
+            // template variables ({{1}} = customer name) are sent to Meta as body params.
+            String body = renderBody(rawBody, c);
             envelopes.add(new CampaignSendMessage(
                 tenantId,
                 campaign.getId(),
@@ -107,7 +110,10 @@ public class CampaignLaunchService {
                 c.getId(),
                 template.getId(),
                 c.getPhoneE164(),
-                body
+                body,
+                template.getWhatsappTemplateName(),
+                template.getLanguage(),
+                templateBodyParams(rawBody, c)
             ));
         }
 
@@ -140,5 +146,43 @@ public class CampaignLaunchService {
         }
 
         return campaignService.get(campaign.getId());
+    }
+
+    /**
+     * Fills personalization placeholders in a template body for one customer. We support
+     * the WhatsApp-style positional token {{1}} and a friendlier {{name}}, both mapped to
+     * the customer's name (falling back to "there" when we have no name on file). Any other
+     * {{...}} tokens are stripped so customers never see raw placeholder syntax.
+     */
+    private static final java.util.regex.Pattern PLACEHOLDER =
+        java.util.regex.Pattern.compile("\\{\\{\\s*\\d+\\s*\\}\\}");
+
+    /**
+     * Body parameters for the WhatsApp template, filling {{1}}, {{2}}, ... The app only holds
+     * one personalization value (the customer's name → {{1}}), so we send a single param when
+     * the template has any variable, none otherwise. Multi-variable templates would need a
+     * per-campaign parameter model (future work) — they'll surface a clear Meta error until then.
+     */
+    static List<String> templateBodyParams(String rawBody, Customer c) {
+        if (rawBody == null || !PLACEHOLDER.matcher(rawBody).find()) {
+            return List.of();
+        }
+        String name = (c.getFullName() != null && !c.getFullName().isBlank())
+            ? c.getFullName().trim()
+            : "there";
+        return List.of(name);
+    }
+
+    static String renderBody(String rawBody, Customer c) {
+        if (rawBody == null) return "";
+        String name = (c.getFullName() != null && !c.getFullName().isBlank())
+            ? c.getFullName().trim()
+            : "there";
+        return rawBody
+            .replace("{{1}}", name)
+            .replace("{{name}}", name)
+            // Remove any leftover {{...}} placeholders we don't have data for.
+            .replaceAll("\\{\\{[^}]*\\}\\}", "")
+            .trim();
     }
 }

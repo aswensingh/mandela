@@ -1,0 +1,5 @@
+ Container marketinghub-redis Running 
+ Container marketinghub-postgres Running 
+ Container marketinghub-rabbitmq Running 
+ Container marketinghub-backend Stopping 
+ Container marketinghub-backend Stopped 

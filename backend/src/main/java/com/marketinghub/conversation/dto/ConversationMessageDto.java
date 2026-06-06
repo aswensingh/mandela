@@ -15,5 +15,6 @@ public record ConversationMessageDto(
     MessageStatus status,
     String whatsappMessageId,
     String errorMessage,
+    Double aiConfidence,
     Instant createdAt
 ) {}

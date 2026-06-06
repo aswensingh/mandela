@@ -265,7 +265,8 @@ export default function WhatsAppSettingsPage() {
         )}
       </Card>
 
-      <Card title="Send test message" style={{ marginTop: 24 }}>
+      {data?.testToolsEnabled && (
+        <Card title="Send test message" style={{ marginTop: 24 }}>
         {!data?.configured && (
           <Alert
             type="info"
@@ -338,8 +339,9 @@ export default function WhatsAppSettingsPage() {
           </Form.Item>
         </Form>
       </Card>
+      )}
 
-      <SimulateInboundCard />
+      {data?.testToolsEnabled && <SimulateInboundCard />}
       <ChatbotSettingsCard />
     </div>
   );

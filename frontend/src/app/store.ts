@@ -12,6 +12,7 @@ import {
 import storage from 'redux-persist/lib/storage';
 import { baseApi } from '@/services/baseApi';
 import authReducer from '@/features/auth/authSlice';
+import uiReducer from '@/features/ui/uiSlice';
 
 const authPersistConfig = {
   key: 'auth',
@@ -19,8 +20,15 @@ const authPersistConfig = {
   whitelist: ['user', 'accessToken', 'refreshToken'],
 };
 
+const uiPersistConfig = {
+  key: 'ui',
+  storage,
+  whitelist: ['debugInfoVisible'],
+};
+
 const rootReducer = combineReducers({
   auth: persistReducer(authPersistConfig, authReducer),
+  ui: persistReducer(uiPersistConfig, uiReducer),
   [baseApi.reducerPath]: baseApi.reducer,
 });
 

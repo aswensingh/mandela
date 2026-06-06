@@ -1,6 +1,7 @@
 package com.marketinghub.conversation;
 
 import com.marketinghub.auth.AuthenticatedPrincipal;
+import com.marketinghub.auth.UserRepository;
 import com.marketinghub.auth.UserRole;
 import com.marketinghub.common.crypto.EncryptionService;
 import com.marketinghub.conversation.dto.ConversationListItemDto;
@@ -52,6 +53,7 @@ class ConversationServiceTest {
     @Mock private TenantRepository tenantRepository;
     @Mock private EncryptionService encryptionService;
     @Mock private WhatsAppApiClient whatsAppApiClient;
+    @Mock private UserRepository userRepository;
 
     private ConversationService service;
 
@@ -62,7 +64,8 @@ class ConversationServiceTest {
     void setUp() {
         service = new ConversationService(
             conversationRepository, customerRepository, messageRepository,
-            tenantRepository, encryptionService, whatsAppApiClient);
+            tenantRepository, encryptionService, whatsAppApiClient,
+            userRepository, "", "");
         TenantContext.setTenantId(TENANT);
         SecurityContextHolder.getContext().setAuthentication(
             new UsernamePasswordAuthenticationToken(

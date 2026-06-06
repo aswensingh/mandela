@@ -59,7 +59,24 @@
       "Bash(curl -fsS -o /dev/null -w \"tunnel HTTP %{http_code}\\\\n\" https://cow-knight-gmbh-physiology.trycloudflare.com/actuator/health)",
       "Bash(curl -fsS -o /dev/null -w \"tunnel HTTP %{http_code}\\\\n\" https://cow-knight-gmbh-physiology.trycloudflare.com/api/webhooks/whatsapp)",
       "Bash(curl -sS -o /dev/null -w \"tunnel root HTTP %{http_code}\\\\n\" https://cow-knight-gmbh-physiology.trycloudflare.com/actuator/health)",
-      "Bash(curl -fsS http://127.0.0.1:20241/metrics)"
+      "Bash(curl -fsS http://127.0.0.1:20241/metrics)",
+      "Bash(git rm *)",
+      "Bash(mvn -q -B -f backend/pom.xml -Dtest=WhatsAppConfigServiceTest -DfailIfNoTests=false test)",
+      "Bash(git check-ignore *)",
+      "Bash(xargs grep -n \"env\")",
+      "Bash(git add *)",
+      "Bash(curl -s -o /dev/null -w \"frontend HTTP %{http_code}\\\\n\" --max-time 10 http://localhost:5173)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('antd', \\(p.dependencies||{}\\).antd\\); console.log\\('react', \\(p.dependencies||{}\\).react\\)\")",
+      "Bash(node -e \"const s=require\\('./package.json'\\).scripts; console.log\\(JSON.stringify\\(s,null,2\\)\\)\")",
+      "Bash(./mvnw -q -o compile)",
+      "Bash(./mvnw -q -o -Dtest=AIReplyWorkerTest,ConversationServiceTest test)",
+      "Bash(./mvnw -o -Dtest=AIReplyWorkerTest,ConversationServiceTest test)",
+      "Bash(./mvnw -o -Dtest=AIReplyWorkerTest test)",
+      "Bash(./mvnw -o -Dtest=ConversationServiceTest,AIReplyWorkerTest test)",
+      "Bash(./mvnw -o -Dtest=ConversationServiceTest test)",
+      "Bash(./mvnw -o test)",
+      "Bash(./mvnw -o -Dtest=CampaignSendWorkerTest,WhatsAppWebhookServiceTest test)",
+      "Bash(grep -E \"Tests run: [0-9]+, Failures.*Skipped: [0-9]+$|BUILD\")"
     ]
   }
 }

@@ -39,6 +39,17 @@ public class Conversation {
     @Column(name = "last_message_at")
     private Instant lastMessageAt;
 
+    @Column(name = "bot_context_reset_at")
+    private Instant botContextResetAt;
+
+    // Why the conversation is in human mode + the AI confidence at that moment (debug aid).
+    // MODEL_REQUESTED / LOW_CONFIDENCE (auto), MANUAL_TAKEOVER (agent), or null (bot-owned).
+    @Column(name = "handoff_reason")
+    private String handoffReason;
+
+    @Column(name = "handoff_confidence")
+    private Double handoffConfidence;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -64,6 +75,15 @@ public class Conversation {
 
     public Instant getLastMessageAt() { return lastMessageAt; }
     public void setLastMessageAt(Instant lastMessageAt) { this.lastMessageAt = lastMessageAt; }
+
+    public Instant getBotContextResetAt() { return botContextResetAt; }
+    public void setBotContextResetAt(Instant botContextResetAt) { this.botContextResetAt = botContextResetAt; }
+
+    public String getHandoffReason() { return handoffReason; }
+    public void setHandoffReason(String handoffReason) { this.handoffReason = handoffReason; }
+
+    public Double getHandoffConfidence() { return handoffConfidence; }
+    public void setHandoffConfidence(Double handoffConfidence) { this.handoffConfidence = handoffConfidence; }
 
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

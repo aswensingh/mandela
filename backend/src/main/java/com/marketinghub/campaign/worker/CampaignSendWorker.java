@@ -108,7 +108,11 @@ public class CampaignSendWorker {
         String wamid = null;
         String failure = null;
         try {
-            wamid = apiClient.sendText(phoneNumberId, accessToken, envelope.toE164(), envelope.body());
+            // Marketing blasts go out as approved templates — the only way to reach customers
+            // who haven't messaged us within the last 24h.
+            wamid = apiClient.sendTemplate(
+                phoneNumberId, accessToken, envelope.toE164(),
+                envelope.templateName(), envelope.languageCode(), envelope.bodyParams());
         } catch (WhatsAppApiException e) {
             failure = truncate(e.getMessage(), 1000);
         } catch (Exception e) {
@@ -142,6 +146,9 @@ public class CampaignSendWorker {
             if (r != null) {
                 r.setStatus(CampaignRecipientStatus.SENT);
                 r.setSentAt(now);
+                // Link the wamid so a later Meta delivery-status webhook can update this
+                // recipient (DELIVERED/READ/FAILED) — see WhatsAppWebhookService.handleStatus.
+                r.setWhatsappMessageId(wamid);
             }
         });
     }

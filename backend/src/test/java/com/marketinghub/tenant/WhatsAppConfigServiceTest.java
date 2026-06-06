@@ -1,5 +1,6 @@
 package com.marketinghub.tenant;
 
+import com.marketinghub.common.TestToolsGuard;
 import com.marketinghub.common.crypto.EncryptionService;
 import com.marketinghub.tenant.dto.UpdateWhatsAppConfigRequest;
 import com.marketinghub.tenant.dto.WhatsAppConfigStatusDto;
@@ -37,6 +38,7 @@ class WhatsAppConfigServiceTest {
         // Mock=true so testConnection() doesn't try to hit Meta during unrelated tests.
         service = new WhatsAppConfigService(
             tenantRepository, encryption, webhookService,
+            new TestToolsGuard(false),
             "https://graph.facebook.com/v21.0", true);
         TenantContext.setTenantId(tenantId);
     }
@@ -55,6 +57,7 @@ class WhatsAppConfigServiceTest {
         assertThat(status.configured()).isFalse();
         assertThat(status.phoneNumberId()).isNull();
         assertThat(status.tokenLastFour()).isNull();
+        assertThat(status.testToolsEnabled()).isFalse();
     }
 
     @Test

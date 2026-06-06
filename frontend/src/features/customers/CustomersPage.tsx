@@ -16,6 +16,7 @@ import {
 import { ContactsOutlined, ImportOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import {
+  useBulkDeleteCustomersMutation,
   useCreateCustomerMutation,
   useDeleteCustomerMutation,
   useListCustomersQuery,
@@ -45,9 +46,15 @@ type CustomerFormValues = {
   optInStatus?: OptInStatus;
 };
 
+const PAGE_SIZE_OPTIONS = [50, 100, 1000, 10000];
+
 export default function CustomersPage() {
   const [page, setPage] = useState(0);
-  const pageSize = 50;
+  const [pageSize, setPageSize] = useState(50);
+  // Fixed pixel height required by AntD's virtual table. Derived from the viewport so
+  // the grid fills the available space; recomputed on every render (cheap) which covers
+  // window resizes that trigger a re-render anyway.
+  const tableScrollY = Math.max(360, window.innerHeight - 360);
   const [search, setSearch] = useState('');
   const [tag, setTag] = useState<string>('');
   const [optInStatus, setOptInStatus] = useState<OptInStatus | ''>('');
@@ -63,6 +70,9 @@ export default function CustomersPage() {
   const [createCustomer, { isLoading: isCreating }] = useCreateCustomerMutation();
   const [updateCustomer, { isLoading: isUpdating }] = useUpdateCustomerMutation();
   const [deleteCustomer, { isLoading: isDeleting }] = useDeleteCustomerMutation();
+  const [bulkDeleteCustomers, { isLoading: isBulkDeleting }] = useBulkDeleteCustomersMutation();
+
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -120,24 +130,38 @@ export default function CustomersPage() {
     try {
       await deleteCustomer(record.id).unwrap();
       message.success(`Deleted ${record.phoneE164}`);
+      setSelectedIds((prev) => prev.filter((id) => id !== record.id));
     } catch (err) {
       message.error(extractMessage(err, 'Failed to delete'));
     }
   };
 
+  const onBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    try {
+      const result = await bulkDeleteCustomers(selectedIds).unwrap();
+      message.success(`Deleted ${result.deleted} customer${result.deleted === 1 ? '' : 's'}`);
+      setSelectedIds([]);
+    } catch (err) {
+      message.error(extractMessage(err, 'Failed to delete selected customers'));
+    }
+  };
+
   const columns: ColumnsType<Customer> = useMemo(
     () => [
-      { title: 'Phone', dataIndex: 'phoneE164', key: 'phoneE164' },
+      { title: 'Phone', dataIndex: 'phoneE164', key: 'phoneE164', width: 160 },
       {
         title: 'Full Name',
         dataIndex: 'fullName',
         key: 'fullName',
+        width: 200,
         render: (val: string | null) => val ?? '—',
       },
       {
         title: 'Tags',
         dataIndex: 'tags',
         key: 'tags',
+        width: 220,
         render: (tags: string[]) =>
           tags.length === 0 ? '—' : tags.map((t) => <Tag key={t}>{t}</Tag>),
       },
@@ -145,17 +169,21 @@ export default function CustomersPage() {
         title: 'Opt-in',
         dataIndex: 'optInStatus',
         key: 'optInStatus',
+        width: 120,
         render: (s: OptInStatus) => <Tag color={OPT_IN_COLORS[s]}>{s}</Tag>,
       },
       {
         title: 'Created',
         dataIndex: 'createdAt',
         key: 'createdAt',
+        width: 200,
         render: (val: string) => new Date(val).toLocaleString(),
       },
       {
         title: 'Actions',
         key: 'actions',
+        width: 160,
+        fixed: 'right',
         render: (_v, record) => (
           <Space>
             <Button size="small" onClick={() => openEdit(record)}>
@@ -234,12 +262,53 @@ export default function CustomersPage() {
         />
       )}
 
+      {selectedIds.length > 0 && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={
+            <Space>
+              <span>
+                {selectedIds.length} selected
+              </span>
+              <Popconfirm
+                title={`Delete ${selectedIds.length} customer${selectedIds.length === 1 ? '' : 's'}?`}
+                description="This cannot be undone."
+                okText="Delete"
+                okButtonProps={{ danger: true }}
+                onConfirm={onBulkDelete}
+              >
+                <Button danger size="small" loading={isBulkDeleting}>
+                  Delete selected
+                </Button>
+              </Popconfirm>
+              <Button size="small" onClick={() => setSelectedIds([])}>
+                Clear
+              </Button>
+            </Space>
+          }
+        />
+      )}
+
       <Table<Customer>
         rowKey="id"
         loading={isLoading}
         columns={columns}
         dataSource={data?.content ?? []}
-        scroll={{ x: 'max-content' }}
+        // Virtual scrolling: only the visible rows are mounted in the DOM, so large
+        // page sizes (1k–10k) stay responsive and "select all" no longer re-renders
+        // thousands of rows. Requires a numeric scroll height + fixed column widths.
+        virtual
+        scroll={{ x: 1108, y: tableScrollY }}
+        rowSelection={{
+          selectedRowKeys: selectedIds,
+          onChange: (keys) => setSelectedIds(keys as string[]),
+          preserveSelectedRowKeys: true,
+          // Virtual tables give any width-less column all the slack — pin the checkbox
+          // column so the data columns scale proportionally instead of leaving a gap.
+          columnWidth: 48,
+        }}
         locale={{
           emptyText:
             // Only show the "Get started" CTA when there are no filters set — otherwise it's
@@ -266,7 +335,19 @@ export default function CustomersPage() {
           current: (data?.number ?? 0) + 1,
           pageSize,
           total: data?.totalElements ?? 0,
-          onChange: (p) => setPage(p - 1),
+          showSizeChanger: true,
+          pageSizeOptions: PAGE_SIZE_OPTIONS.map(String),
+          onChange: (p, size) => {
+            // AntD fires onChange for both page and page-size changes. When the page-size
+            // shrinks, the current page might no longer exist — jumping back to page 0
+            // is the safe default.
+            if (size !== pageSize) {
+              setPageSize(size);
+              setPage(0);
+            } else {
+              setPage(p - 1);
+            }
+          },
         }}
       />
 

@@ -1,6 +1,7 @@
 package com.marketinghub.webhook;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.marketinghub.campaign.CampaignRecipientRepository;
 import com.marketinghub.conversation.Conversation;
 import com.marketinghub.conversation.ConversationRepository;
 import com.marketinghub.customer.Customer;
@@ -44,6 +45,7 @@ class WhatsAppWebhookServiceTest {
     @Mock private ConversationRepository conversationRepository;
     @Mock private MessageRepository messageRepository;
     @Mock private WebhookEventRepository webhookEventRepository;
+    @Mock private CampaignRecipientRepository recipientRepository;
     @Mock private RabbitTemplate rabbitTemplate;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -58,7 +60,7 @@ class WhatsAppWebhookServiceTest {
     void setUp() {
         service = new WhatsAppWebhookService(
             tenantRepository, customerRepository, conversationRepository,
-            messageRepository, webhookEventRepository,
+            messageRepository, webhookEventRepository, recipientRepository,
             objectMapper, rabbitTemplate, VERIFY_TOKEN, APP_SECRET);
     }
 
@@ -102,7 +104,7 @@ class WhatsAppWebhookServiceTest {
     void signature_skipped_whenAppSecretBlank() {
         WhatsAppWebhookService noSecret = new WhatsAppWebhookService(
             tenantRepository, customerRepository, conversationRepository,
-            messageRepository, webhookEventRepository,
+            messageRepository, webhookEventRepository, recipientRepository,
             objectMapper, rabbitTemplate, VERIFY_TOKEN, "");
         noSecret.verifySignature("{}".getBytes(), "sha256=anything"); // no throw
     }
