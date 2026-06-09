@@ -8,10 +8,12 @@ import com.marketinghub.customer.CustomerRepository;
 import com.marketinghub.template.MessageTemplate;
 import com.marketinghub.template.MessageTemplateRepository;
 import com.marketinghub.template.TemplateNotFoundException;
+import com.marketinghub.template.TemplateStatus;
 import com.marketinghub.tenant.TenantContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,13 +46,21 @@ public class CampaignLaunchService {
     private final CampaignService campaignService;
     private final RabbitTemplate rabbitTemplate;
 
+    /**
+     * When WhatsApp is mocked (local dev) we don't enforce the "template must be Meta-approved"
+     * launch guard — there's no real Meta to approve anything, and sends are faked anyway.
+     * In live mode the guard turns a silent per-recipient 132001 into one clear pre-launch error.
+     */
+    private final boolean whatsAppMock;
+
     public CampaignLaunchService(
         CampaignRepository campaignRepository,
         CampaignRecipientRepository recipientRepository,
         MessageTemplateRepository templateRepository,
         CustomerRepository customerRepository,
         CampaignService campaignService,
-        RabbitTemplate rabbitTemplate
+        RabbitTemplate rabbitTemplate,
+        @Value("${whatsapp.mock:false}") boolean whatsAppMock
     ) {
         this.campaignRepository = campaignRepository;
         this.recipientRepository = recipientRepository;
@@ -58,6 +68,7 @@ public class CampaignLaunchService {
         this.customerRepository = customerRepository;
         this.campaignService = campaignService;
         this.rabbitTemplate = rabbitTemplate;
+        this.whatsAppMock = whatsAppMock;
     }
 
     @Transactional
@@ -73,8 +84,25 @@ public class CampaignLaunchService {
             throw new InvalidCampaignStateException(
                 "Only DRAFT or SCHEDULED campaigns can be launched (current: " + campaign.getStatus() + ")");
         }
-        MessageTemplate template = templateRepository.findByIdAndTenantId(campaign.getTemplateId(), tenantId)
-            .orElseThrow(() -> new TemplateNotFoundException(campaign.getTemplateId()));
+        // Resolve what we'll actually send. TEMPLATE campaigns ride on an approved Meta template;
+        // FREE_TEXT campaigns carry their own body and go out as plain text (24h-window only).
+        MessageTemplate template = null;
+        String rawBody;
+        if (campaign.getSendMode() == CampaignSendMode.FREE_TEXT) {
+            rawBody = campaign.getBodyText();
+        } else {
+            template = templateRepository.findByIdAndTenantId(campaign.getTemplateId(), tenantId)
+                .orElseThrow(() -> new TemplateNotFoundException(campaign.getTemplateId()));
+            // Live-mode guard: Meta rejects sends on non-approved templates (error 132001).
+            // Surface that as one clear error at launch instead of N failed recipients.
+            if (!whatsAppMock && template.getStatus() != TemplateStatus.APPROVED) {
+                throw new InvalidCampaignStateException(
+                    "Template '" + template.getName() + "' is not approved by Meta (status="
+                        + template.getStatus() + "). Sync templates from Meta and get it approved "
+                        + "before launching.");
+            }
+            rawBody = template.getBodyPreview() == null ? template.getName() : template.getBodyPreview();
+        }
 
         // Snapshot the recipients + customer phone numbers BEFORE we hand off to the queue.
         List<CampaignRecipient> recipients = recipientRepository
@@ -91,7 +119,6 @@ public class CampaignLaunchService {
         }
 
         List<CampaignSendMessage> envelopes = new ArrayList<>(recipients.size());
-        String rawBody = template.getBodyPreview() == null ? template.getName() : template.getBodyPreview();
         for (CampaignRecipient r : recipients) {
             Customer c = byId.get(r.getCustomerId());
             if (c == null) {
@@ -103,17 +130,19 @@ public class CampaignLaunchService {
             // Personalize per recipient: the rendered text is stored/shown in-app; the
             // template variables ({{1}} = customer name) are sent to Meta as body params.
             String body = renderBody(rawBody, c);
+            // FREE_TEXT: templateName == null tells the worker to call sendText(body).
+            // TEMPLATE: pass the Meta template name/language + the {{1}} body param.
             envelopes.add(new CampaignSendMessage(
                 tenantId,
                 campaign.getId(),
                 r.getId(),
                 c.getId(),
-                template.getId(),
+                template == null ? null : template.getId(),
                 c.getPhoneE164(),
                 body,
-                template.getWhatsappTemplateName(),
-                template.getLanguage(),
-                templateBodyParams(rawBody, c)
+                template == null ? null : template.getWhatsappTemplateName(),
+                template == null ? null : template.getLanguage(),
+                template == null ? java.util.List.of() : templateBodyParams(rawBody, c)
             ));
         }
 

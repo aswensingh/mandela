@@ -45,7 +45,7 @@ class MessageTemplateServiceTest {
     }
 
     @Test
-    void create_savesWithTenantScope_andDefaultStatusApproved() {
+    void create_savesWithTenantScope_andDefaultStatusPending() {
         when(templateRepository.existsByTenantIdAndWhatsappTemplateNameAndLanguage(
             TENANT_A, "promo_oct", "en_US")).thenReturn(false);
         when(templateRepository.save(any(MessageTemplate.class))).thenAnswer(inv -> {
@@ -58,7 +58,8 @@ class MessageTemplateServiceTest {
             "October promo", "promo_oct", "en_US", "Hi {{1}}, ...", null));
 
         assertThat(dto.tenantId()).isEqualTo(TENANT_A);
-        assertThat(dto.status()).isEqualTo(TemplateStatus.APPROVED);
+        // Default is PENDING — a template is only APPROVED once Meta confirms it via sync.
+        assertThat(dto.status()).isEqualTo(TemplateStatus.PENDING);
         assertThat(dto.whatsappTemplateName()).isEqualTo("promo_oct");
 
         ArgumentCaptor<MessageTemplate> cap = ArgumentCaptor.forClass(MessageTemplate.class);
@@ -102,11 +103,41 @@ class MessageTemplateServiceTest {
         when(templateRepository.findByIdAndTenantId(id, TENANT_A)).thenReturn(Optional.of(existing));
 
         TemplateDto dto = service.update(id, new UpdateTemplateRequest(
-            "New name", null, TemplateStatus.PAUSED));
+            "New name", null, TemplateStatus.PAUSED, null));
 
         assertThat(dto.name()).isEqualTo("New name");
         assertThat(dto.bodyPreview()).isEqualTo("Old preview"); // not touched
         assertThat(dto.status()).isEqualTo(TemplateStatus.PAUSED);
+        assertThat(dto.language()).isEqualTo("en_US"); // not touched
+    }
+
+    @Test
+    void update_language_correctsCodeWhenNoCollision() {
+        UUID id = UUID.randomUUID();
+        MessageTemplate existing = stub(id, "promo_oct", "en", TemplateStatus.NOT_FOUND);
+        when(templateRepository.findByIdAndTenantId(id, TENANT_A)).thenReturn(Optional.of(existing));
+        when(templateRepository.existsByTenantIdAndWhatsappTemplateNameAndLanguage(
+            TENANT_A, "promo_oct", "en_US")).thenReturn(false);
+
+        TemplateDto dto = service.update(id, new UpdateTemplateRequest(
+            null, null, null, "en_US"));
+
+        assertThat(dto.language()).isEqualTo("en_US");
+    }
+
+    @Test
+    void update_language_collisionThrows() {
+        UUID id = UUID.randomUUID();
+        MessageTemplate existing = stub(id, "promo_oct", "en", TemplateStatus.NOT_FOUND);
+        when(templateRepository.findByIdAndTenantId(id, TENANT_A)).thenReturn(Optional.of(existing));
+        // Another row already uses (promo_oct, en_US).
+        when(templateRepository.existsByTenantIdAndWhatsappTemplateNameAndLanguage(
+            TENANT_A, "promo_oct", "en_US")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.update(id, new UpdateTemplateRequest(
+            null, null, null, "en_US")))
+            .isInstanceOf(DuplicateTemplateException.class);
+        assertThat(existing.getLanguage()).isEqualTo("en"); // unchanged
     }
 
     @Test

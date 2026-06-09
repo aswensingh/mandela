@@ -65,7 +65,7 @@ public class WhatsAppConfigService {
             lastFour = n <= 4 ? plaintext : plaintext.substring(n - 4);
         }
         return new WhatsAppConfigStatusDto(configured, tenant.getWhatsappPhoneNumberId(), lastFour,
-            testToolsGuard.enabled());
+            tenant.getWhatsappBusinessAccountId(), testToolsGuard.enabled());
     }
 
     @Transactional
@@ -73,10 +73,13 @@ public class WhatsAppConfigService {
         Tenant tenant = currentTenant();
         tenant.setWhatsappPhoneNumberId(request.phoneNumberId());
         tenant.setWhatsappAccessTokenEncrypted(encryptionService.encrypt(request.accessToken()));
+        // WABA ID is optional — normalise blank to null so "not set" is unambiguous.
+        String waba = request.businessAccountId();
+        tenant.setWhatsappBusinessAccountId(waba == null || waba.isBlank() ? null : waba.trim());
         int n = request.accessToken().length();
         String lastFour = n <= 4 ? request.accessToken() : request.accessToken().substring(n - 4);
         return new WhatsAppConfigStatusDto(true, tenant.getWhatsappPhoneNumberId(), lastFour,
-            testToolsGuard.enabled());
+            tenant.getWhatsappBusinessAccountId(), testToolsGuard.enabled());
     }
 
     /**

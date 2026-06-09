@@ -48,7 +48,10 @@ public class MessageTemplateService {
         t.setWhatsappTemplateName(request.whatsappTemplateName());
         t.setLanguage(request.language());
         t.setBodyPreview(request.bodyPreview());
-        t.setStatus(request.status() == null ? TemplateStatus.APPROVED : request.status());
+        // Default to PENDING, not APPROVED: a template only becomes APPROVED once Meta says so
+        // (via "Sync from Meta"). Defaulting to APPROVED is what let unapproved templates sail
+        // into a launch and fail at Meta with error 132001.
+        t.setStatus(request.status() == null ? TemplateStatus.PENDING : request.status());
         MessageTemplate saved = templateRepository.save(t);
         templateRepository.flush();
         return toDto(saved);
@@ -67,6 +70,16 @@ public class MessageTemplateService {
         }
         if (request.status() != null) {
             t.setStatus(request.status());
+        }
+        // Correcting the language (e.g. en -> en_US) changes the (name, language) identity, so guard
+        // the tenant-unique constraint. Status is left as-is — re-run "Sync from Meta" to refresh it.
+        if (request.language() != null && !request.language().isBlank()
+                && !request.language().equals(t.getLanguage())) {
+            if (templateRepository.existsByTenantIdAndWhatsappTemplateNameAndLanguage(
+                    tenantId, t.getWhatsappTemplateName(), request.language())) {
+                throw new DuplicateTemplateException(t.getWhatsappTemplateName(), request.language());
+            }
+            t.setLanguage(request.language());
         }
         return toDto(t);
     }

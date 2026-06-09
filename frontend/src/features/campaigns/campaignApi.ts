@@ -15,13 +15,17 @@ export type CampaignRecipientStatus =
   | 'READ'
   | 'FAILED';
 
+export type CampaignSendMode = 'TEMPLATE' | 'FREE_TEXT';
+
 export type Campaign = {
   id: string;
   tenantId: string;
   name: string;
   status: CampaignStatus;
-  templateId: string;
+  sendMode: CampaignSendMode;
+  templateId: string | null;
   templateName: string | null;
+  bodyText: string | null;
   scheduledAt: string | null;
   createdByUserId: string;
   startedAt: string | null;
@@ -48,7 +52,9 @@ export type Recipient = {
 
 export type CreateCampaignRequest = {
   name: string;
-  templateId: string;
+  sendMode: CampaignSendMode;
+  templateId?: string | null;
+  bodyText?: string | null;
   scheduledAt?: string | null;
   customerIds: string[];
 };

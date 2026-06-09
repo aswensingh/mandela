@@ -2,6 +2,7 @@ package com.marketinghub.template;
 
 import com.marketinghub.template.dto.CreateTemplateRequest;
 import com.marketinghub.template.dto.TemplateDto;
+import com.marketinghub.template.dto.TemplateSyncResultDto;
 import com.marketinghub.template.dto.UpdateTemplateRequest;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
@@ -26,9 +27,11 @@ import java.util.UUID;
 public class MessageTemplateController {
 
     private final MessageTemplateService service;
+    private final TemplateSyncService syncService;
 
-    public MessageTemplateController(MessageTemplateService service) {
+    public MessageTemplateController(MessageTemplateService service, TemplateSyncService syncService) {
         this.service = service;
+        this.syncService = syncService;
     }
 
     @GetMapping
@@ -45,6 +48,12 @@ public class MessageTemplateController {
     public ResponseEntity<TemplateDto> create(@Valid @RequestBody CreateTemplateRequest request) {
         TemplateDto created = service.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    }
+
+    /** Pull real approval status from Meta and write it onto this tenant's templates. */
+    @PostMapping("/sync")
+    public TemplateSyncResultDto sync() {
+        return syncService.syncFromMeta();
     }
 
     @PatchMapping("/{id}")

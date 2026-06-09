@@ -32,6 +32,7 @@ const { Title, Paragraph, Text } = Typography;
 type FormValues = {
   phoneNumberId: string;
   accessToken: string;
+  businessAccountId?: string;
 };
 
 type TestFormValues = {
@@ -134,6 +135,13 @@ export default function WhatsAppSettingsPage() {
           <Descriptions.Item label="Access token (last 4)">
             {data?.tokenLastFour ? <Text code>…{data.tokenLastFour}</Text> : '—'}
           </Descriptions.Item>
+          <Descriptions.Item label="Business Account ID (WABA)">
+            {data?.businessAccountId ? (
+              <Text code>{data.businessAccountId}</Text>
+            ) : (
+              <Text type="secondary">— (needed for template status sync)</Text>
+            )}
+          </Descriptions.Item>
         </Descriptions>
 
         {/* Diagnostic: ping Meta with the stored creds and show what we get back.
@@ -201,7 +209,15 @@ export default function WhatsAppSettingsPage() {
       <Card title={editing || !data?.configured ? 'Set credentials' : 'Replace credentials'}>
         {!editing && data?.configured ? (
           <Space>
-            <Button onClick={() => setEditing(true)}>Replace credentials</Button>
+            <Button
+              onClick={() => {
+                // WABA ID isn't a secret, so carry it over; the token is never pre-filled.
+                form.setFieldsValue({ businessAccountId: data?.businessAccountId ?? undefined });
+                setEditing(true);
+              }}
+            >
+              Replace credentials
+            </Button>
           </Space>
         ) : (
           <>
@@ -241,6 +257,18 @@ export default function WhatsAppSettingsPage() {
                 extra="Permanent token from Meta — kept encrypted and never echoed back."
               >
                 <Input.Password autoComplete="new-password" />
+              </Form.Item>
+              <Form.Item
+                label={
+                  <HelpLabel
+                    text="Business Account ID (WABA) — optional"
+                    hint="Your WhatsApp Business Account ID from Meta for Developers → your App → WhatsApp → API Setup (labelled 'WhatsApp Business Account ID'). Only needed to sync template approval status from Meta — sending works without it."
+                  />
+                }
+                name="businessAccountId"
+                extra="Optional. Enables “Sync from Meta” on the Templates page."
+              >
+                <Input placeholder="e.g. 102290129340398" autoComplete="off" />
               </Form.Item>
               <Form.Item style={{ marginBottom: 0 }}>
                 <Space>

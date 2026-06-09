@@ -51,10 +51,28 @@ public class CampaignService {
         UUID tenantId = requireTenant();
         UUID userId = currentUserId();
 
-        // Template must belong to this tenant.
-        MessageTemplate template = templateRepository
-            .findByIdAndTenantId(request.templateId(), tenantId)
-            .orElseThrow(() -> new TemplateNotFoundException(request.templateId()));
+        // Default to TEMPLATE for back-compat when the client omits the mode.
+        CampaignSendMode sendMode = request.sendMode() == null
+            ? CampaignSendMode.TEMPLATE
+            : request.sendMode();
+
+        // Mode-specific payload validation (a record can't express conditional requireds).
+        MessageTemplate template = null;
+        if (sendMode == CampaignSendMode.TEMPLATE) {
+            if (request.templateId() == null) {
+                throw new InvalidCampaignStateException(
+                    "templateId is required for a TEMPLATE campaign");
+            }
+            // Template must belong to this tenant.
+            template = templateRepository
+                .findByIdAndTenantId(request.templateId(), tenantId)
+                .orElseThrow(() -> new TemplateNotFoundException(request.templateId()));
+        } else {
+            if (request.bodyText() == null || request.bodyText().isBlank()) {
+                throw new InvalidCampaignStateException(
+                    "bodyText is required for a FREE_TEXT campaign");
+            }
+        }
 
         // All customer IDs must belong to this tenant. Dedup first to avoid double counting.
         Set<UUID> uniqueCustomerIds = new HashSet<>(request.customerIds());
@@ -68,7 +86,9 @@ public class CampaignService {
         campaign.setTenantId(tenantId);
         campaign.setName(request.name());
         campaign.setStatus(CampaignStatus.DRAFT);
-        campaign.setTemplateId(template.getId());
+        campaign.setSendMode(sendMode);
+        campaign.setTemplateId(template == null ? null : template.getId());
+        campaign.setBodyText(sendMode == CampaignSendMode.FREE_TEXT ? request.bodyText() : null);
         campaign.setScheduledAt(request.scheduledAt());
         campaign.setCreatedByUserId(userId);
         Campaign savedCampaign = campaignRepository.save(campaign);
@@ -90,9 +110,13 @@ public class CampaignService {
     public Page<CampaignDto> list(Pageable pageable) {
         UUID tenantId = requireTenant();
         Page<Campaign> page = campaignRepository.findAllByTenantId(tenantId, pageable);
-        // Batch-load template names for every campaign in the page.
+        // Batch-load template names for every campaign in the page (FREE_TEXT campaigns have none).
         Set<UUID> templateIds = new HashSet<>();
-        page.forEach(c -> templateIds.add(c.getTemplateId()));
+        page.forEach(c -> {
+            if (c.getTemplateId() != null) {
+                templateIds.add(c.getTemplateId());
+            }
+        });
         Map<UUID, MessageTemplate> templatesById = new HashMap<>();
         if (!templateIds.isEmpty()) {
             templateRepository.findAllById(templateIds)
@@ -106,8 +130,7 @@ public class CampaignService {
         UUID tenantId = requireTenant();
         Campaign c = campaignRepository.findByIdAndTenantId(id, tenantId)
             .orElseThrow(() -> new CampaignNotFoundException(id));
-        MessageTemplate t = templateRepository.findById(c.getTemplateId()).orElse(null);
-        return buildDto(c, t);
+        return buildDto(c, lookupTemplate(c));
     }
 
     @Transactional(readOnly = true)
@@ -141,8 +164,7 @@ public class CampaignService {
         if (request.scheduledAt() != null) {
             c.setScheduledAt(request.scheduledAt());
         }
-        MessageTemplate t = templateRepository.findById(c.getTemplateId()).orElse(null);
-        return buildDto(c, t);
+        return buildDto(c, lookupTemplate(c));
     }
 
     @Transactional
@@ -155,8 +177,14 @@ public class CampaignService {
                 "Cannot cancel a campaign in state " + c.getStatus());
         }
         c.setStatus(CampaignStatus.CANCELLED);
-        MessageTemplate t = templateRepository.findById(c.getTemplateId()).orElse(null);
-        return buildDto(c, t);
+        return buildDto(c, lookupTemplate(c));
+    }
+
+    /** Template lookup tolerant of FREE_TEXT campaigns, which carry no templateId. */
+    private MessageTemplate lookupTemplate(Campaign c) {
+        return c.getTemplateId() == null
+            ? null
+            : templateRepository.findById(c.getTemplateId()).orElse(null);
     }
 
     @Transactional
@@ -164,9 +192,11 @@ public class CampaignService {
         UUID tenantId = requireTenant();
         Campaign c = campaignRepository.findByIdAndTenantId(id, tenantId)
             .orElseThrow(() -> new CampaignNotFoundException(id));
-        if (c.getStatus() != CampaignStatus.DRAFT && c.getStatus() != CampaignStatus.CANCELLED) {
+        // Any campaign can be deleted except one mid-blast — deleting while the worker is still
+        // fanning out messages would orphan in-flight queue items. Cancel or wait for it first.
+        if (c.getStatus() == CampaignStatus.SENDING) {
             throw new InvalidCampaignStateException(
-                "Only DRAFT or CANCELLED campaigns can be deleted (current: " + c.getStatus() + ")");
+                "Cannot delete a campaign while it is still SENDING — wait for it to finish");
         }
         // ON DELETE CASCADE on campaign_recipients.campaign_id handles the children.
         campaignRepository.delete(c);
@@ -183,8 +213,10 @@ public class CampaignService {
             c.getTenantId(),
             c.getName(),
             c.getStatus(),
+            c.getSendMode(),
             c.getTemplateId(),
             template == null ? null : template.getName(),
+            c.getBodyText(),
             c.getScheduledAt(),
             c.getCreatedByUserId(),
             c.getStartedAt(),

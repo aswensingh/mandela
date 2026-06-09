@@ -1,5 +1,6 @@
 package com.marketinghub.campaign.dto;
 
+import com.marketinghub.campaign.CampaignSendMode;
 import com.marketinghub.campaign.CampaignStatus;
 
 import java.time.Instant;
@@ -10,8 +11,10 @@ public record CampaignDto(
     UUID tenantId,
     String name,
     CampaignStatus status,
+    CampaignSendMode sendMode,
     UUID templateId,
     String templateName,
+    String bodyText,
     Instant scheduledAt,
     UUID createdByUserId,
     Instant startedAt,

@@ -7,6 +7,7 @@ import {
   Input,
   Modal,
   Popconfirm,
+  Segmented,
   Select,
   Space,
   Table,
@@ -26,6 +27,7 @@ import {
   useListCampaignsQuery,
   useListRecipientsQuery,
   type Campaign,
+  type CampaignSendMode,
   type CampaignStatus,
 } from './campaignApi';
 import { useListCustomersQuery, type Customer } from '@/features/customers/customerApi';
@@ -44,7 +46,9 @@ const STATUS_COLOR: Record<CampaignStatus, string> = {
 
 type CreateFormValues = {
   name: string;
-  templateId: string;
+  sendMode: CampaignSendMode;
+  templateId?: string;
+  bodyText?: string;
   scheduledAt?: Dayjs;
 };
 
@@ -82,8 +86,12 @@ export default function CampaignsPage() {
     { skip: !createOpen },
   );
 
+  // Drives the conditional template-vs-text fields in the create modal.
+  const sendMode: CampaignSendMode = Form.useWatch('sendMode', form) ?? 'TEMPLATE';
+
   const openCreate = () => {
     form.resetFields();
+    form.setFieldsValue({ sendMode: 'TEMPLATE' });
     setSelectedCustomerIds([]);
     setCreateError(null);
     setCreateOpen(true);
@@ -98,7 +106,9 @@ export default function CampaignsPage() {
     try {
       await createCampaign({
         name: values.name,
-        templateId: values.templateId,
+        sendMode: values.sendMode,
+        templateId: values.sendMode === 'TEMPLATE' ? values.templateId : null,
+        bodyText: values.sendMode === 'FREE_TEXT' ? values.bodyText : null,
         scheduledAt: values.scheduledAt ? values.scheduledAt.toISOString() : null,
         customerIds: selectedCustomerIds,
       }).unwrap();
@@ -158,10 +168,17 @@ export default function CampaignsPage() {
         render: (s: CampaignStatus) => <Tag color={STATUS_COLOR[s]}>{s}</Tag>,
       },
       {
-        title: 'Template',
-        dataIndex: 'templateName',
-        key: 'templateName',
-        render: (v: string | null) => v ?? '—',
+        title: 'Message',
+        key: 'message',
+        render: (_v, record) =>
+          record.sendMode === 'FREE_TEXT' ? (
+            <Tag color="purple">Free text</Tag>
+          ) : (
+            <>
+              <Tag color="geekblue">Template</Tag>
+              {record.templateName ?? '—'}
+            </>
+          ),
       },
       {
         title: 'Progress',
@@ -213,9 +230,10 @@ export default function CampaignsPage() {
                 </Button>
               </Popconfirm>
             )}
-            {(record.status === 'DRAFT' || record.status === 'CANCELLED') && (
+            {record.status !== 'SENDING' && (
               <Popconfirm
                 title={`Delete ${record.name}?`}
+                description="This removes the campaign and its recipient records (sent messages stay in conversations)."
                 okText="Delete"
                 okButtonProps={{ danger: true }}
                 onConfirm={() => onDelete(record)}
@@ -332,19 +350,42 @@ export default function CampaignsPage() {
           >
             <Input placeholder="e.g. October promo blast" />
           </Form.Item>
-          <Form.Item
-            label="Template"
-            name="templateId"
-            rules={[{ required: true, message: 'Pick a template' }]}
-          >
-            <Select<string>
-              placeholder={isLoadingCustomers ? 'Loading...' : 'Pick a Meta-approved template'}
-              options={(templatesPage?.content ?? []).map((t: Template) => ({
-                label: t.name,
-                value: t.id,
-              }))}
+          <Form.Item label="Message type" name="sendMode">
+            <Segmented
+              options={[
+                { label: '📣 Marketing template', value: 'TEMPLATE' },
+                { label: '💬 Free text', value: 'FREE_TEXT' },
+              ]}
             />
           </Form.Item>
+          {sendMode === 'TEMPLATE' ? (
+            <Form.Item
+              label="Template"
+              name="templateId"
+              rules={[{ required: true, message: 'Pick a template' }]}
+              extra="Reaches any customer. The template must be APPROVED in Meta (use “Sync from Meta” on the Templates page)."
+            >
+              <Select<string>
+                placeholder={isLoadingCustomers ? 'Loading...' : 'Pick a Meta-approved template'}
+                options={(templatesPage?.content ?? []).map((t: Template) => ({
+                  label: `${t.name} (${t.status})`,
+                  value: t.id,
+                }))}
+              />
+            </Form.Item>
+          ) : (
+            <Form.Item
+              label="Message"
+              name="bodyText"
+              rules={[
+                { required: true, message: 'Enter a message' },
+                { max: 4096, message: 'Max 4096 chars' },
+              ]}
+              extra="Free text only reaches customers who messaged you in the last 24h — others will fail. Use {{name}} to personalize. No Meta approval needed."
+            >
+              <Input.TextArea rows={4} placeholder="Hi {{name}}, ..." />
+            </Form.Item>
+          )}
           <Form.Item label="Scheduled at (optional)" name="scheduledAt">
             <DatePicker showTime style={{ width: '100%' }} />
           </Form.Item>

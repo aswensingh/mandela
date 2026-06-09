@@ -76,7 +76,21 @@
       "Bash(./mvnw -o -Dtest=ConversationServiceTest test)",
       "Bash(./mvnw -o test)",
       "Bash(./mvnw -o -Dtest=CampaignSendWorkerTest,WhatsAppWebhookServiceTest test)",
-      "Bash(grep -E \"Tests run: [0-9]+, Failures.*Skipped: [0-9]+$|BUILD\")"
+      "Bash(grep -E \"Tests run: [0-9]+, Failures.*Skipped: [0-9]+$|BUILD\")",
+      "Bash(git -C C:/Projects/mandela ls-files)",
+      "Bash(grep -iE \"readme|\\\\.md$\")",
+      "Bash(git -C C:/Projects/mandela log --oneline -- README.md)",
+      "Bash(git -C C:/Projects/mandela show 0757a46 -- README.md)",
+      "Bash(git -C C:/Projects/mandela grep -liE \"DEMO_SEED|acme|beta|DemoSeed\" -- \"backend/src/main/*\")",
+      "Bash(git -C C:/Projects/mandela grep -niE \"DEMO_SEED|acme|beta\" -- \".env\")",
+      "Bash(git -C C:/Projects/mandela show 0757a46 --stat)",
+      "Bash(git -C C:/Projects/mandela show 2bdb79e:backend/src/main/java/com/marketinghub/auth/DemoDataSeeder.java)",
+      "Bash(git -C C:/Projects/mandela show 0757a46~1:backend/src/main/java/com/marketinghub/auth/DemoDataSeeder.java)",
+      "Bash(git -C C:/Projects/mandela log --since=\"2026-06-04\" --pretty=format:\"%h %ad %s\" --date=format:\"%Y-%m-%d %H:%M\" -- backend frontend)",
+      "Bash(git -C C:/Projects/mandela log -8 --pretty=format:\"%h %ad %s\" --date=format:\"%Y-%m-%d %H:%M\")",
+      "Bash(git -C C:/Projects/mandela status --short)",
+      "Bash(git -C C:/Projects/mandela diff --stat)",
+      "Bash(curl -s -o /dev/null -w \"backend /api/health -> HTTP %{http_code}\\\\n\" http://localhost:8080/api/health)"
     ]
   }
 }

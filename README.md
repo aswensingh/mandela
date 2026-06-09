@@ -53,17 +53,24 @@ docker compose down            # stop containers, keep the database
 docker compose down -v         # stop AND wipe the database
 ```
 
-### Default account
+### Default accounts
 
 Login is by **username** (not email). On a fresh database the platform admin is created from
-`PLATFORM_ADMIN_USERNAME` / `PLATFORM_ADMIN_PASSWORD` in your `.env`:
+`PLATFORM_ADMIN_USERNAME` / `PLATFORM_ADMIN_PASSWORD` in your `.env`. The current local database
+also has a demo tenant (**Acme Dental**) and its accounts already seeded:
 
-| Role | Username | Password |
-|---|---|---|
-| Platform Admin | `admin` | `admin` |
+| Role | Username | Password | Tenant |
+|---|---|---|---|
+| Platform Admin | `admin` | `admin` | — |
+| Tenant Admin | `acme` | `acme12345` | Acme Dental |
+| Agent | `agent1` | `agent12345` | Acme Dental |
 
-Sign in as the platform admin to create your first tenant and its Tenant Admin, then manage
-customers, templates, and campaigns from there.
+Sign in as the platform admin to create and manage tenants, or as `acme` to manage Acme Dental's
+customers, templates, and campaigns.
+
+> **Note:** the Acme Dental accounts are demo data already present in your local database. The
+> seeder that created them has been removed, so `docker compose down -v` (which wipes the DB) will
+> **not** bring them back — only the platform admin is re-created on a fresh database.
 
 ### Mock mode (default)
 
@@ -103,7 +110,9 @@ After your Platform Admin creates your workspace and gives you the credentials, 
 4. **Users** → invite agents (Role: AGENT) and viewers (Role: VIEWER).
 5. **Customers** → upload a CSV (`phone_e164, full_name, tags, opt_in_status`) or add them one by one.
 6. **Templates** → create reusable message bodies with `{name}`-style placeholders.
-7. **Campaigns** → pick a template + filter recipients (by tag, opt-in status) → click **Launch**.
+7. **Campaigns** → choose a **message type**, filter recipients (by tag, opt-in status) → click **Launch**:
+   - **📣 Marketing template** — reaches any customer, but needs a Meta-**approved** template (use **Sync from Meta** on the Templates page to see real approval status).
+   - **💬 Free text** — no approval needed, but Meta only delivers it to customers who messaged you in the last 24h (others fail).
 
 Conversations land in the **Conversations** menu in real time. The bot answers automatically; flip to **HUMAN** at any time to take over.
 
@@ -231,7 +240,7 @@ cd backend
 ./mvnw test
 ```
 
-Currently **132 tests** covering auth, multi-tenancy, customers, CSV import, encryption, WhatsApp send, templates, campaigns, the blast worker, the rate limiter, webhooks, conversations, the AI worker, the knowledge base RAG, tenant deletion, and password reset.
+Currently **136 tests** covering auth, multi-tenancy, customers, CSV import, encryption, WhatsApp send, templates, campaigns (template + free-text send modes), the blast worker, the rate limiter, webhooks, conversations, the AI worker, the knowledge base RAG, tenant deletion, and password reset.
 
 ---
 

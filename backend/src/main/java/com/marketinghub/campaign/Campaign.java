@@ -33,8 +33,17 @@ public class Campaign {
     @Column(name = "status", nullable = false)
     private CampaignStatus status = CampaignStatus.DRAFT;
 
-    @Column(name = "template_id", nullable = false)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "send_mode", nullable = false)
+    private CampaignSendMode sendMode = CampaignSendMode.TEMPLATE;
+
+    /** Set for TEMPLATE campaigns; null for FREE_TEXT. */
+    @Column(name = "template_id")
     private UUID templateId;
+
+    /** Set for FREE_TEXT campaigns; null for TEMPLATE (the body comes from the template there). */
+    @Column(name = "body_text")
+    private String bodyText;
 
     @Column(name = "scheduled_at")
     private Instant scheduledAt;
@@ -68,8 +77,14 @@ public class Campaign {
     public CampaignStatus getStatus() { return status; }
     public void setStatus(CampaignStatus status) { this.status = status; }
 
+    public CampaignSendMode getSendMode() { return sendMode; }
+    public void setSendMode(CampaignSendMode sendMode) { this.sendMode = sendMode; }
+
     public UUID getTemplateId() { return templateId; }
     public void setTemplateId(UUID templateId) { this.templateId = templateId; }
+
+    public String getBodyText() { return bodyText; }
+    public void setBodyText(String bodyText) { this.bodyText = bodyText; }
 
     public Instant getScheduledAt() { return scheduledAt; }
     public void setScheduledAt(Instant scheduledAt) { this.scheduledAt = scheduledAt; }

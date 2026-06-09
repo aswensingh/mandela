@@ -1,6 +1,20 @@
 import { baseApi } from '@/services/baseApi';
 
-export type TemplateStatus = 'APPROVED' | 'PENDING' | 'REJECTED' | 'PAUSED' | 'DISABLED';
+export type TemplateStatus =
+  | 'APPROVED'
+  | 'PENDING'
+  | 'REJECTED'
+  | 'PAUSED'
+  | 'DISABLED'
+  | 'NOT_FOUND';
+
+export type TemplateSyncResult = {
+  checked: number;
+  updated: number;
+  notFound: number;
+  metaCount: number;
+  message: string;
+};
 
 export type Template = {
   id: string;
@@ -26,6 +40,7 @@ export type UpdateTemplateRequest = {
   name?: string;
   bodyPreview?: string;
   status?: TemplateStatus;
+  language?: string;
 };
 
 type Page<T> = {
@@ -77,6 +92,11 @@ export const templateApi = baseApi.injectEndpoints({
         { type: 'Template', id: 'LIST' },
       ],
     }),
+    syncTemplates: builder.mutation<TemplateSyncResult, void>({
+      query: () => ({ url: '/templates/sync', method: 'POST' }),
+      // Status changes for the whole list — refetch it.
+      invalidatesTags: [{ type: 'Template', id: 'LIST' }],
+    }),
   }),
   overrideExisting: false,
 });
@@ -86,4 +106,5 @@ export const {
   useCreateTemplateMutation,
   useUpdateTemplateMutation,
   useDeleteTemplateMutation,
+  useSyncTemplatesMutation,
 } = templateApi;

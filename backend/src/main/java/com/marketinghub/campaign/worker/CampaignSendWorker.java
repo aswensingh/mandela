@@ -108,11 +108,16 @@ public class CampaignSendWorker {
         String wamid = null;
         String failure = null;
         try {
-            // Marketing blasts go out as approved templates — the only way to reach customers
-            // who haven't messaged us within the last 24h.
-            wamid = apiClient.sendTemplate(
-                phoneNumberId, accessToken, envelope.toE164(),
-                envelope.templateName(), envelope.languageCode(), envelope.bodyParams());
+            if (envelope.templateName() != null) {
+                // TEMPLATE campaign: approved Meta template — reaches customers outside the 24h window.
+                wamid = apiClient.sendTemplate(
+                    phoneNumberId, accessToken, envelope.toE164(),
+                    envelope.templateName(), envelope.languageCode(), envelope.bodyParams());
+            } else {
+                // FREE_TEXT campaign: plain text — only delivered inside the 24h window.
+                wamid = apiClient.sendText(
+                    phoneNumberId, accessToken, envelope.toE164(), envelope.body());
+            }
         } catch (WhatsAppApiException e) {
             failure = truncate(e.getMessage(), 1000);
         } catch (Exception e) {

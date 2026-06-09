@@ -43,6 +43,9 @@ public class Tenant {
     @Column(name = "whatsapp_access_token_encrypted")
     private byte[] whatsappAccessTokenEncrypted;
 
+    @Column(name = "whatsapp_business_account_id")
+    private String whatsappBusinessAccountId;
+
     @Column(name = "ai_system_prompt")
     private String aiSystemPrompt;
 
@@ -75,6 +78,9 @@ public class Tenant {
 
     public byte[] getWhatsappAccessTokenEncrypted() { return whatsappAccessTokenEncrypted; }
     public void setWhatsappAccessTokenEncrypted(byte[] whatsappAccessTokenEncrypted) { this.whatsappAccessTokenEncrypted = whatsappAccessTokenEncrypted; }
+
+    public String getWhatsappBusinessAccountId() { return whatsappBusinessAccountId; }
+    public void setWhatsappBusinessAccountId(String whatsappBusinessAccountId) { this.whatsappBusinessAccountId = whatsappBusinessAccountId; }
 
     public String getAiSystemPrompt() { return aiSystemPrompt; }
     public void setAiSystemPrompt(String aiSystemPrompt) { this.aiSystemPrompt = aiSystemPrompt; }

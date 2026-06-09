@@ -90,10 +90,11 @@ class CampaignServiceTest {
         when(recipientRepository.countByCampaignId(any(UUID.class))).thenReturn(3L);
 
         CampaignDto dto = service.create(new CreateCampaignRequest(
-            "Spring blast", templateId, null, List.of(c1, c2, c3)));
+            "Spring blast", CampaignSendMode.TEMPLATE, templateId, null, null, List.of(c1, c2, c3)));
 
         assertThat(dto.tenantId()).isEqualTo(TENANT_A);
         assertThat(dto.status()).isEqualTo(CampaignStatus.DRAFT);
+        assertThat(dto.sendMode()).isEqualTo(CampaignSendMode.TEMPLATE);
         assertThat(dto.templateId()).isEqualTo(templateId);
         assertThat(dto.templateName()).isEqualTo("My template");
         assertThat(dto.recipientCount()).isEqualTo(3);
@@ -116,7 +117,7 @@ class CampaignServiceTest {
         when(recipientRepository.save(any(CampaignRecipient.class))).thenAnswer(inv -> inv.getArgument(0));
 
         service.create(new CreateCampaignRequest(
-            "Dedup test", templateId, null, List.of(c1, c1, c1)));
+            "Dedup test", CampaignSendMode.TEMPLATE, templateId, null, null, List.of(c1, c1, c1)));
 
         // Three duplicates collapse to one save call.
         verify(recipientRepository, org.mockito.Mockito.times(1)).save(any(CampaignRecipient.class));
@@ -129,7 +130,7 @@ class CampaignServiceTest {
             .thenReturn(Optional.empty()); // template belongs to TENANT_B
 
         assertThatThrownBy(() -> service.create(new CreateCampaignRequest(
-            "x", templateId, null, List.of(UUID.randomUUID()))))
+            "x", CampaignSendMode.TEMPLATE, templateId, null, null, List.of(UUID.randomUUID()))))
             .isInstanceOf(TemplateNotFoundException.class);
 
         verify(campaignRepository, never()).save(any());
@@ -147,7 +148,7 @@ class CampaignServiceTest {
         when(customerRepository.countByIdInAndTenantId(Set.of(c1, c2), TENANT_A)).thenReturn(1L);
 
         assertThatThrownBy(() -> service.create(new CreateCampaignRequest(
-            "x", templateId, null, List.of(c1, c2))))
+            "x", CampaignSendMode.TEMPLATE, templateId, null, null, List.of(c1, c2))))
             .isInstanceOf(InvalidCampaignStateException.class);
 
         verify(campaignRepository, never()).save(any());
@@ -195,14 +196,26 @@ class CampaignServiceTest {
     }
 
     @Test
-    void delete_onlyDraftOrCancelled() {
+    void delete_blockedWhileSending() {
         UUID id = UUID.randomUUID();
         Campaign c = stubCampaign(id, TENANT_A);
-        c.setStatus(CampaignStatus.SENT);
+        c.setStatus(CampaignStatus.SENDING);
         when(campaignRepository.findByIdAndTenantId(id, TENANT_A)).thenReturn(Optional.of(c));
         assertThatThrownBy(() -> service.delete(id))
             .isInstanceOf(InvalidCampaignStateException.class);
         verify(campaignRepository, never()).delete(any());
+    }
+
+    @Test
+    void delete_allowedWhenSent() {
+        UUID id = UUID.randomUUID();
+        Campaign c = stubCampaign(id, TENANT_A);
+        c.setStatus(CampaignStatus.SENT);
+        when(campaignRepository.findByIdAndTenantId(id, TENANT_A)).thenReturn(Optional.of(c));
+
+        service.delete(id);
+
+        verify(campaignRepository).delete(c);
     }
 
     @Test
@@ -221,8 +234,47 @@ class CampaignServiceTest {
         when(recipientRepository.save(any(CampaignRecipient.class))).thenAnswer(inv -> inv.getArgument(0));
 
         CampaignDto dto = service.create(new CreateCampaignRequest(
-            "B blast", templateId, null, List.of(customerId)));
+            "B blast", CampaignSendMode.TEMPLATE, templateId, null, null, List.of(customerId)));
         assertThat(dto.tenantId()).isEqualTo(TENANT_B);
+    }
+
+    @Test
+    void create_freeText_savesBodyAndNoTemplate() {
+        UUID c1 = UUID.randomUUID();
+        when(customerRepository.countByIdInAndTenantId(Set.of(c1), TENANT_A)).thenReturn(1L);
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(inv -> {
+            Campaign c = inv.getArgument(0);
+            c.setId(UUID.randomUUID());
+            return c;
+        });
+        when(recipientRepository.save(any(CampaignRecipient.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        CampaignDto dto = service.create(new CreateCampaignRequest(
+            "Flash sale", CampaignSendMode.FREE_TEXT, null, "Hi {{name}}, flash sale today!",
+            null, List.of(c1)));
+
+        assertThat(dto.sendMode()).isEqualTo(CampaignSendMode.FREE_TEXT);
+        assertThat(dto.templateId()).isNull();
+        assertThat(dto.templateName()).isNull();
+        assertThat(dto.bodyText()).isEqualTo("Hi {{name}}, flash sale today!");
+        // FREE_TEXT must never touch the template repository.
+        verify(templateRepository, never()).findByIdAndTenantId(any(), any());
+    }
+
+    @Test
+    void create_freeText_withoutBody_throws() {
+        assertThatThrownBy(() -> service.create(new CreateCampaignRequest(
+            "No body", CampaignSendMode.FREE_TEXT, null, "  ", null, List.of(UUID.randomUUID()))))
+            .isInstanceOf(InvalidCampaignStateException.class);
+        verify(campaignRepository, never()).save(any());
+    }
+
+    @Test
+    void create_template_withoutTemplateId_throws() {
+        assertThatThrownBy(() -> service.create(new CreateCampaignRequest(
+            "No template", CampaignSendMode.TEMPLATE, null, null, null, List.of(UUID.randomUUID()))))
+            .isInstanceOf(InvalidCampaignStateException.class);
+        verify(campaignRepository, never()).save(any());
     }
 
     private static MessageTemplate stubTemplate(UUID id, UUID tenantId) {

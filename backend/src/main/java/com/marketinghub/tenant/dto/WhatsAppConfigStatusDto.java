@@ -4,5 +4,6 @@ public record WhatsAppConfigStatusDto(
     boolean configured,
     String phoneNumberId,
     String tokenLastFour,
+    String businessAccountId,
     boolean testToolsEnabled
 ) {}

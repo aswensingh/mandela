@@ -4,12 +4,14 @@ export type WhatsAppConfigStatus = {
   configured: boolean;
   phoneNumberId: string | null;
   tokenLastFour: string | null;
+  businessAccountId: string | null;
   testToolsEnabled: boolean;
 };
 
 export type UpdateWhatsAppConfigRequest = {
   phoneNumberId: string;
   accessToken: string;
+  businessAccountId?: string | null;
 };
 
 export type SendTestRequest = {

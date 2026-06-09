@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   Alert,
+  AutoComplete,
   Button,
   Form,
   Input,
@@ -13,12 +14,13 @@ import {
   Typography,
   message,
 } from 'antd';
-import { FileTextOutlined, PlusOutlined } from '@ant-design/icons';
+import { FileTextOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import {
   useCreateTemplateMutation,
   useDeleteTemplateMutation,
   useListTemplatesQuery,
+  useSyncTemplatesMutation,
   useUpdateTemplateMutation,
   type CreateTemplateRequest,
   type Template,
@@ -37,10 +39,30 @@ const STATUS_OPTIONS: TemplateStatus[] = [
   'DISABLED',
 ];
 
+// Common WhatsApp template language codes. This is a suggestion list for an AutoComplete,
+// NOT an exhaustive allow-list — Meta supports ~80 codes and you can type any valid one
+// (format 'en' or 'en_US'). The important part: Meta usually registers English templates
+// (incl. its 'hello_world' sample) under en_US, not en — so both are offered.
 const LANGUAGE_OPTIONS = [
-  { label: 'English', value: 'en' },
-  { label: 'Malay', value: 'ms' },
-  { label: 'Chinese', value: 'zh_CN' },
+  { label: 'en_US — English (US)', value: 'en_US' },
+  { label: 'en_GB — English (UK)', value: 'en_GB' },
+  { label: 'en — English', value: 'en' },
+  { label: 'ms — Malay', value: 'ms' },
+  { label: 'id — Indonesian', value: 'id' },
+  { label: 'zh_CN — Chinese (Simplified)', value: 'zh_CN' },
+  { label: 'zh_HK — Chinese (Hong Kong)', value: 'zh_HK' },
+  { label: 'zh_TW — Chinese (Traditional)', value: 'zh_TW' },
+  { label: 'ta — Tamil', value: 'ta' },
+  { label: 'th — Thai', value: 'th' },
+  { label: 'vi — Vietnamese', value: 'vi' },
+];
+
+const LANGUAGE_RULES = [
+  { required: true, message: 'Required' },
+  {
+    pattern: /^[a-z]{2,3}(_[A-Z]{2})?$/,
+    message: "Use a Meta code like 'en' or 'en_US'",
+  },
 ];
 
 const STATUS_COLOR: Record<TemplateStatus, string> = {
@@ -49,6 +71,7 @@ const STATUS_COLOR: Record<TemplateStatus, string> = {
   REJECTED: 'red',
   PAUSED: 'orange',
   DISABLED: 'default',
+  NOT_FOUND: 'volcano',
 };
 
 type TemplateFormValues = {
@@ -66,6 +89,19 @@ export default function TemplatesPage() {
   const [createTemplate, { isLoading: isCreating }] = useCreateTemplateMutation();
   const [updateTemplate, { isLoading: isUpdating }] = useUpdateTemplateMutation();
   const [deleteTemplate, { isLoading: isDeleting }] = useDeleteTemplateMutation();
+  const [syncTemplates, { isLoading: isSyncing }] = useSyncTemplatesMutation();
+
+  const onSync = async () => {
+    try {
+      const result = await syncTemplates().unwrap();
+      message.success(result.message);
+    } catch (err) {
+      const apiMessage =
+        (err as { data?: { error?: { message?: string } } })?.data?.error?.message ??
+        'Failed to sync from Meta';
+      message.error(apiMessage);
+    }
+  };
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Template | null>(null);
@@ -75,7 +111,7 @@ export default function TemplatesPage() {
   const openCreate = () => {
     setEditing(null);
     form.resetFields();
-    form.setFieldsValue({ status: 'APPROVED' });
+    form.setFieldsValue({ status: 'PENDING' });
     setModalError(null);
     setModalOpen(true);
   };
@@ -103,6 +139,7 @@ export default function TemplatesPage() {
             name: values.name,
             bodyPreview: values.bodyPreview ?? '',
             status: values.status,
+            language: values.language,
           },
         }).unwrap();
         message.success('Template updated');
@@ -217,14 +254,22 @@ export default function TemplatesPage() {
         <Title level={3} style={{ margin: 0 }}>
           Message Templates
         </Title>
-        <Button type="primary" onClick={openCreate}>
-          Add Template
-        </Button>
+        <Space>
+          <Button icon={<SyncOutlined />} onClick={onSync} loading={isSyncing}>
+            Sync from Meta
+          </Button>
+          <Button type="primary" onClick={openCreate}>
+            Add Template
+          </Button>
+        </Space>
       </Space>
 
       <Paragraph type="secondary">
         Templates are approved on the Meta side. MarketingHub only stores their metadata so
-        you can pick them when launching campaigns.
+        you can pick them when launching campaigns. Hit <Text strong>Sync from Meta</Text> to pull
+        each template's real approval status (needs your WhatsApp Business Account ID in WhatsApp
+        Settings). A <Tag color="volcano">NOT_FOUND</Tag> status means Meta has no template with
+        that exact name + language.
       </Paragraph>
 
       {error && (
@@ -288,7 +333,7 @@ export default function TemplatesPage() {
           form={form}
           layout="vertical"
           onFinish={onSubmit}
-          initialValues={{ status: 'APPROVED' }}
+          initialValues={{ status: 'PENDING' }}
         >
           <Form.Item
             label="Internal label"
@@ -321,14 +366,23 @@ export default function TemplatesPage() {
             <Input placeholder="october_promo_v2" disabled={!!editing} />
           </Form.Item>
           <Form.Item
-            label="Language"
+            label={
+              <HelpLabel
+                text="Language"
+                hint="Must match the language your template is approved under in Meta — exactly. Meta treats 'en' and 'en_US' as different languages, and registers most English templates (including its 'hello_world' sample) as en_US. Pick a suggestion or type any valid code."
+              />
+            }
             name="language"
-            rules={[{ required: true, message: 'Required' }]}
+            rules={LANGUAGE_RULES}
+            extra="Type to search, or enter any Meta code (e.g. en_US). Must match Meta exactly."
           >
-            <Select
+            <AutoComplete
               options={LANGUAGE_OPTIONS}
-              placeholder="Select language"
-              disabled={!!editing}
+              placeholder="e.g. en_US"
+              filterOption={(input, option) =>
+                (option?.value ?? '').toLowerCase().includes(input.toLowerCase()) ||
+                (String(option?.label) ?? '').toLowerCase().includes(input.toLowerCase())
+              }
             />
           </Form.Item>
           <Form.Item label="Body preview (optional)" name="bodyPreview">

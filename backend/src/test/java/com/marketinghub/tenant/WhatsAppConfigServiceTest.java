@@ -66,11 +66,12 @@ class WhatsAppConfigServiceTest {
         when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(t));
 
         WhatsAppConfigStatusDto status = service.updateMyConfig(
-            new UpdateWhatsAppConfigRequest("PHONE123", "EAAJsupersecret1234"));
+            new UpdateWhatsAppConfigRequest("PHONE123", "EAAJsupersecret1234", "WABA999"));
 
         assertThat(status.configured()).isTrue();
         assertThat(status.phoneNumberId()).isEqualTo("PHONE123");
         assertThat(status.tokenLastFour()).isEqualTo("1234");
+        assertThat(status.businessAccountId()).isEqualTo("WABA999");
         // The blob stored on the entity is encrypted — must NOT contain the plain token text
         assertThat(new String(t.getWhatsappAccessTokenEncrypted())).doesNotContain("EAAJsupersecret1234");
         // But round-trip decrypt recovers it
